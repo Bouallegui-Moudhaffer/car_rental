@@ -1,0 +1,6 @@
+Flask
+mysqlclient
+flask-mail
+flask-weasyprint
+passlib
+pycryptodome

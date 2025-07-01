@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  web:
+    build: .
+    ports:
+      - "5000:5000"
+    environment:
+      - FLASK_ENV=development
+      - MAIL_SERVER=mailhog
+      - MAIL_PORT=1025
+      - MAIL_USERNAME=
+      - MAIL_PASSWORD=
+      - DB_HOST=db
+      - DB_USER=root
+      - DB_PASSWORD=root
+      - DB_NAME=car_rental
+    depends_on:
+      - db
+
+  mailhog:
+    image: mailhog/mailhog
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
+  db:
+    image: mysql:5.7
+    environment:
+      MYSQL_DATABASE: car_rental
+      MYSQL_ROOT_PASSWORD: root
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./db/car_rental_db.sql:/docker-entrypoint-initdb.d/car_rental_db.sql

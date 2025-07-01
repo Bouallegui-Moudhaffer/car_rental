@@ -1,11 +1,11 @@
 from flask import Flask, render_template, redirect, url_for , flash
-import MySQLdb		#Mysql connector
+import MySQLdb
 import base64
-from flask_weasyprint import HTML,render_pdf   #for generating invoice
-import re	#for regular expression
-from flask_mail import Mail,Message	#for sending mail to customers
-from Crypto.Cipher import AES            #for encrypting password recovery answer of customers
-from passlib.hash import pbkdf2_sha256    #for hashing password of customers
+from flask_weasyprint import HTML,render_pdf
+import re
+from flask_mail import Mail,Message
+from Crypto.Cipher import AES
+from passlib.hash import pbkdf2_sha256
 from flask import request
 import datetime
 import time
@@ -16,175 +16,120 @@ app = Flask(__name__)
 
 
 app.config.update(
-	DEBUG=True,
-	#EMAIL SETTINGS
-	MAIL_SERVER='smtp.gmail.com',
-	MAIL_PORT=465,
-	MAIL_USE_SSL=True,
-	MAIL_USERNAME = 'abc@gmail.com', #Enter your emailid along with enable "recieve mails from unprotected services' in your gmail account
-	MAIL_PASSWORD = '*****'    #enter your password
-	)
+  DEBUG=True,
+  MAIL_SERVER  = os.getenv("MAIL_SERVER", "mailhog"),
+  MAIL_PORT    = int(os.getenv("MAIL_PORT", 1025)),
+  MAIL_USE_TLS = False,
+  MAIL_USE_SSL = False,
+  MAIL_USERNAME= os.getenv("MAIL_USERNAME", ""),
+  MAIL_PASSWORD= os.getenv("MAIL_PASSWORD", "")
+)
+
 
 #app.config.update(mail_settings)
 mail = Mail(app)
 
 app.secret_key = 'my unobvious secret key'
 
-conn = MySQLdb.connect(host='localhost',user='yourusername',passwd = '******',port = 8090,db="car_rental") #enter Database username and password of mysql here
+conn = MySQLdb.connect(
+    host=os.getenv("DB_HOST", "db"),
+    user=os.getenv("DB_USER", "root"),
+    passwd=os.getenv("DB_PASSWORD", "root"),
+    db=os.getenv("DB_NAME", "car_rental")
+)
 cursor = conn.cursor()
-master_password = "REAPER"  #just master password for a session
+master_password = "REAPER"
 custid = ""
 driverID = 0
 CARID = ""
 payment_type = ""
-payment_status = ["Paid","Not Paid"]
+payment_status = ["Paid", "Not Paid"]
 b_actual_id = 0
 
 def checkstring(inputstring):
-	F = 0;
-	length = len(inputstring)
-	for a in range(0,length):
-		if (inputstring[a] >= 'a' and inputstring[a] <= 'z') or (inputstring[a] >= 'A' and inputstring[a] <= 'Z'):
-			F = 1
-		else:
-			F = 0
-	if F == 1:
-		return False
-	else:
-		return True
-	
-	#return any(char.isdigit() for char in inputstring)
+    return not any(char.isalpha() for char in inputstring)
 	
 #-----------------------------------------------FRONT PAGE -------------------------------------------------------
 @app.route("/",methods=['GET','POST'])
-
 def homepage():
-	print("ENTERED")
 	return render_template("index.html")
 #---------------------------ADD New CUSTOMER ----------------------------------------------------------------------------
 
-@app.route('/addcustomer/',methods = ['GET','POST'])
-
+@app.route('/addcustomer/', methods=['GET','POST'])
 def register():
-	
-	print("entered")
-	#adduser()
-	return render_template('addcustomer.html')
+    return render_template('addcustomer.html')
 	
 
-@app.route('/adduser/',methods = ['GET','POST'])
-
+@app.route('/adduser/', methods=['GET','POST'])
 def adduser():
-	print("entered")
-	Username_to_string1 = ""
-	flag = False
-	cursor = conn.cursor()
-	secret_key = '1234567890123456'
-	#security_questions["1","2"
-	try:
-		user_rating = ""
-		current_day = ""
-		current_month = ""
-		current_year = "" 
-		current = datetime.datetime.now()
-		current_day = str(current.day)
-		current_month = str(current.month)
-		current_year = str(current.year)
-		current_date3 = current_day + "-" + current_month + "-" + current_year
-		#Username_to_string1 = ""
-		fname = request.form["FName"]
-		value1 = checkstring(fname)
-		if value1 == True:
-			flash("Please enter a Valid First Name !!!")
-			return render_template("addcustomer.html")
-		
-		lname = request.form["lName"]
-		value2 = checkstring(lname)
-		if value2 == True:
-			flash("Please enter a Valid Last Name !!!")
-			return render_template("addcustomer.html")
-		username= request.form["username"]
-		cursor.execute("""SELECT userId FROM Cust_User """)
-		actual_usernames1 = cursor.fetchall()
-		list1 = list(actual_usernames1)
-		Username_to_string1 = str(username)
-		length = len(list1)
-		for a in range(0,length):
-			print(actual_usernames1[a])
-			print(Username_to_string1)
-			if actual_usernames1[a][0] == Username_to_string1:
-				print(actual_usernames1[a])
-				print(Username_to_string1)
-				flag = True
-		print(Username_to_string1)
-		print(list1)
-	#	user_present1 = Username_to_string1 not in actual_usernames1
-		print(flag)
-		if flag == True:
-			flash("Sorry Username is Already Present !!!")
-			return render_template("addcustomer.html")
-		else:
-			
-			email = request.form["email"]
-			if re.search('@',email):
-				em = 0
-			else:
-				flash("Please Enter Valid Email  !!!")
-				return render_template("addcustomer.html")	
-			phone = request.form["PhoneNumber"]
-			plen = len(phone)
-			if plen != 10:
-				flash("Please Enter 10 Digit Phone Number only !!!")
-				return render_template("addcustomer.html")
-			age = request.form["age"]
-			int_age = int(age)
-			if int_age < 17 :
-				flash("Sorry you must above 15 years of age !!!")
-				return render_template("addcustomer.html")
-			
-				
-			password = request.form["Password"]
-			
-			cpassword = request.form["ConfirmPassword"]
-			print("CHECKED")
-			security_question = int(request.form["squestion"])
-			security_ans = request.form["answer"]
-				
-			hash_password = pbkdf2_sha256.hash(password)					# Hashing + salting Password
-			S_ans = security_ans.rjust(32)
-			
-			encrypted = AES.new(secret_key,AES.MODE_ECB)
-			ansEncoded = base64.b64encode(encrypted.encrypt(S_ans))
-			ansEncoded = ansEncoded.strip()
-	#		obj = AES.new('This is a key123',AES.MODE_CFB,'This is an IV456')
-	#		encrypted_SQans = obj.encrypt(security_ans)					#Encrypting security Question Answer
-				
-			print("Encrypted ans : ",ansEncoded)
-			print(hash_password)
-			#selection = request.form['selection']
-			#answer = request.form['answer']
-		
-			msg=Message("Welcome to Car Rental Services",sender="Car Rentel Services",recipients=[email])
-			msg.body = "Thank you for signing up for Car Rental Service, Now Book a Cab Now !!!"
-			mail.send(msg)
-			'''except Exception, e:
-				return(str(e)) '''	
-			print( fname,lname,password,username,cpassword,email,security_question,security_ans)
-			cursor.execute("""INSERT INTO Cust_User(userId,fName,lName,emailId,phone,registration_Date,password,reset_Question,reset_Ans_Type) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)""",(username,fname,lname,email,phone,current_date3,hash_password,security_question,ansEncoded)) 
-				
-					
-			#cursor.execute("select * from login")
-			#data = cursor.fetchall()
-				
-				
-			conn.commit()    
-			cursor.close()   
-			print ("Registered")
-				
-			flash("Successfully Registered !!! ")
-			return redirect('/login')
-	except Exception as e:
-		return(str(e))
+    cursor = conn.cursor()
+    try:
+        # Date
+        current = datetime.datetime.now()
+        current_date3 = current.strftime("%d-%m-%Y")
+        # Form fields
+        fname = request.form["FName"]
+        if checkstring(fname):
+            flash("Please enter a Valid First Name !!!")
+            return render_template("addcustomer.html")
+        lname = request.form["lName"]
+        if checkstring(lname):
+            flash("Please enter a Valid Last Name !!!")
+            return render_template("addcustomer.html")
+        username = request.form["username"]
+        # Check existing
+        cursor.execute("SELECT userId FROM Cust_User")
+        if (username,) in cursor.fetchall():
+            flash("Sorry Username is Already Present !!!")
+            return render_template("addcustomer.html")
+        # Other validations
+        email = request.form["email"]
+        if '@' not in email:
+            flash("Please Enter Valid Email  !!!")
+            return render_template("addcustomer.html")
+        phone = request.form["PhoneNumber"]
+        if len(phone) != 10:
+            flash("Please Enter 10 Digit Phone Number only !!!")
+            return render_template("addcustomer.html")
+        age = int(request.form["age"])
+        if age < 17:
+            flash("Sorry you must above 15 years of age !!!")
+            return render_template("addcustomer.html")
+        password = request.form["Password"]
+        # Security Q&A
+        security_question = int(request.form["squestion"])
+        security_ans = request.form["answer"]
+        # Hash password
+        hash_password = pbkdf2_sha256.hash(password)
+        # Encrypt answer correctly
+        raw_ans = security_ans
+        padded_ans = raw_ans.rjust(32).encode('utf-8')  # bytes
+        key_bytes = '1234567890123456'.encode('utf-8')    # 16-byte key
+        cipher = AES.new(key_bytes, AES.MODE_ECB)
+        encrypted = cipher.encrypt(padded_ans)           # bytes
+        ansEncoded = base64.b64encode(encrypted).decode('utf-8')  # str
+        # Send welcome email
+        msg = Message("Welcome to Car Rental Services", sender="Car Rental Services", recipients=[email])
+        msg.body = "Thank you for signing up for Car Rental Service, Now Book a Cab Now !!!"
+        mail.send(msg)
+        # Insert
+        cursor.execute(
+            """
+            INSERT INTO Cust_User
+            (userId, fName, lName, emailId, phone,
+             registration_Date, password, reset_Question, reset_Ans_Type)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            """,
+            (username, fname, lname, email, phone,
+             current_date3, hash_password,
+             str(security_question), ansEncoded)
+        )
+        conn.commit()
+        cursor.close()
+        flash("Successfully Registered !!! ")
+        return redirect('/login')
+    except Exception as e:
+        return str(e)
 			
 			
 			
@@ -593,100 +538,59 @@ def feedbackform():
 	return render_template("feedback.html")
 #---------------------------------------------------FEEDBACK FORM END-------------------------------------------------------------------
 #-------------------------------------------------ADD ADMIN-------------------------------------------------------------------------------------
-@app.route('/addadmin/',methods = ['GET','POST'])
-
+@app.route('/addadmin/', methods=['GET','POST'])
 def addadmindriver():
-	
-	print("entered")
-	#adduser()
-	return render_template('addadmin.html')
-	
+    return render_template('addadmin.html')
 
-@app.route('/addADMIN/',methods = ['GET','POST'])
-
+@app.route('/addADMIN/', methods=['GET','POST'])
 def addadmin():
-	print("entered")
-	Username_to_string1 = ""
-	flag = False
-	cursor = conn.cursor()
-	secret_key = '1234567890123456'
-	#security_questions["1","2"
-	try:
-		#Username_to_string1 = ""
-		current_day = ""
-		current_month = ""
-		current_year = "" 
-		current = datetime.datetime.now()
-		current_day = str(current.day)
-		current_month = str(current.month)
-		current_year = str(current.year)
-		current_date = current_day + "-" + current_month + "-" + current_year
-		print("Date of today = ",current_date)
-		fname = request.form["FName"]
-		lname = request.form["lName"]
-		username= request.form["username"]
-		cursor.execute("""SELECT userId FROM Admin_User """)
-		actual_usernames1 = cursor.fetchall()
-		list1 = list(actual_usernames1)
-		Username_to_string1 = str(username)
-		length = len(list1)
-		for a in range(0,length):
-			print(actual_usernames1[a])
-			print(Username_to_string1)
-			if actual_usernames1[a][0] == Username_to_string1:
-				print(actual_usernames1[a])
-				print(Username_to_string1)
-				flag = True
-		print(Username_to_string1)
-		print(list1)
-	#	user_present1 = Username_to_string1 not in actual_usernames1
-		print(flag)
-		if flag == True:
-			flash("Sorry Username is Already Present !!!")
-			return render_template("addadmin.html")
-		else:
-			email = request.form["email"]	
-			phone = request.form["PhoneNumber"]
-			age = request.form["age"]
-			int_age = int(age)
-			if int_age < 15 :
-				flash("Sorry you must above 15 years of age !!!")
-				return render_template("addadmin.html")
-				
-			password = request.form["Password"]
-			cpassword = request.form["ConfirmPassword"]
-			security_question = int(request.form["squestion"])
-			security_ans = request.form["answer"]
-				
-			hash_password = pbkdf2_sha256.hash(password)					# Hashing + salting Password
-			S_ans = security_ans.rjust(32)
-			
-			encrypted = AES.new(secret_key,AES.MODE_ECB)
-			ansEncoded = base64.b64encode(encrypted.encrypt(S_ans))
-			ansEncoded = ansEncoded.strip()
-	#		obj = AES.new('This is a key123',AES.MODE_CFB,'This is an IV456')
-	#		encrypted_SQans = obj.encrypt(security_ans)					#Encrypting security Question Answer
-				
-			print("Encrypted ans : ",ansEncoded)
-			print(hash_password)
-			#selection = request.form['selection']
-			#answer = request.form['answer']
-				
-			print( fname,lname,password,username,cpassword,email,security_question,security_ans)
-			cursor.execute("""INSERT INTO Admin_User(userId,fName,lName,emailId,phone,registration_Date,password,reset_Question,reset_Ans_Type) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)""",(username,fname,lname,email,phone,current_date,hash_password,security_question,ansEncoded)) 
-					
-			#cursor.execute("select * from login")
-			#data = cursor.fetchall()
-				
-				
-			conn.commit()    
-			cursor.close()   
-			print ("Registered")
-				
-			flash("Admin Successfully Registered !!! ")
-			return render_template('addadmin.html')
-	except Exception as e:
-		return(str(e))
+    cursor = conn.cursor()
+    try:
+        current_date = datetime.datetime.now().strftime("%d-%m-%Y")
+        fname = request.form["FName"]
+        lname = request.form["lName"]
+        username = request.form["username"]
+        # Check existing
+        cursor.execute("SELECT userId FROM Admin_User")
+        if (username,) in cursor.fetchall():
+            flash("Sorry Username is Already Present !!!")
+            return render_template("addadmin.html")
+        # Validations
+        age = int(request.form["age"])
+        if age < 15:
+            flash("Sorry you must above 15 years of age !!!")
+            return render_template("addadmin.html")
+        email = request.form["email"]
+        phone = request.form["PhoneNumber"]
+        password = request.form["Password"]
+        security_question = int(request.form["squestion"])
+        security_ans = request.form["answer"]
+        hash_password = pbkdf2_sha256.hash(password)
+        # Encrypt answer
+        raw_ans = security_ans
+        padded_ans = raw_ans.rjust(32).encode('utf-8')
+        key_bytes = '1234567890123456'.encode('utf-8')
+        cipher = AES.new(key_bytes, AES.MODE_ECB)
+        encrypted = cipher.encrypt(padded_ans)
+        ansEncoded = base64.b64encode(encrypted).decode('utf-8')
+        # Insert
+        cursor.execute(
+            """
+            INSERT INTO Admin_User
+            (userId, fName, lName, emailId, phone,
+             registration_Date, password, reset_Question, reset_Ans_Type)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            """,
+            (username, fname, lname, email, phone,
+             current_date, hash_password,
+             str(security_question), ansEncoded)
+        )
+        conn.commit()
+        cursor.close()
+        flash("Admin Successfully Registered !!! ")
+        return render_template('addadmin.html')
+    except Exception as e:
+        return str(e)
 			
 
 #-----------------------------------------------DISPLAY ADMIN DETAILS-------------------------------------------------------------------------------
@@ -1373,10 +1277,10 @@ def statusdriver():
 		most_used_route = "Nashik-Aurangabad"
 	elif NDroute > NNroute and NDroute > NMroute and NDroute > NAroute and NDroute > NProute:
 		most_used_route = "Nashik-Dhule"
-	
-	cursor.execute("""SELECT SUM(total_amount) FROM Payment""")
-	total_sum = cursor.fetchall()
-	tsum = int(total_sum[0][0])	
+
+	cursor.execute("SELECT COALESCE(SUM(total_amount), 0) FROM Payment")
+	row = cursor.fetchone() or (0,)
+	tsum = int(row[0])
 	print("TOTAL CUST",total_cust)
 	return render_template('Status.html',total = total_cust,tcar=total_car1,total_e=total_employ,total_car = tcar,total_driver=drivert,total_booking=tbooking,mroute=most_used_route,total_sum1=tsum)
 
@@ -1400,6 +1304,7 @@ def lastpage():
 	return render_template("final.html")
 	
 if __name__ == "__main__":
-	
-	app.run(debug=True)	
+    # listen on all interfaces so Docker can route in
+    app.run(host="0.0.0.0", port=5000, debug=True, use_reloader=False)
+
 	
