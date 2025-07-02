@@ -1,6 +1,17 @@
 version: '3.8'
 
 services:
+    jenkins:
+      image: jenkins/jenkins:lts
+      privileged: true
+      user: root
+      ports:
+       - 8080:8080
+       - 50000:50000
+    container_name: jenkins
+    volumes:
+      - /home/${wassim}/jenkins_compose/jenkins_configuration:/var/jenkins_home
+      - /var/run/docker.sock:/var/run/docker.sock
   web:
     build: .
     ports:
@@ -33,3 +44,21 @@ services:
       - "3306:3306"
     volumes:
       - ./db/car_rental_db.sql:/docker-entrypoint-initdb.d/car_rental_db.sql
+      
+  sonarqube:
+    image: sonarqube:latest
+    container_name: sonarqube
+    depends_on:
+      - db
+    ports:
+      - "9000:9000"
+    environment:
+      - SONAR_ES_BOOTSTRAP_CHECKS_DISABLE=true
+      - sonar.jdbc.url=jdbc:h2:tcp://localhost:9092/sonar
+    volumes:
+      - sonarqube_data:/opt/sonarqube/data
+      - sonarqube_extensions:/opt/sonarqube/extensions
+
+volumes:
+  sonarqube_data:
+  sonarqube_extensions:
