@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     environment {
-        SONAR_TOKEN = credentials('sonarqube') // Correct use for declarative environment
+        SONAR_TOKEN = credentials('sonarqube')
     }
 
     stages {
@@ -14,11 +14,18 @@ pipeline {
             }
         }
 
-
         stage('SonarQube Analysis') {
             steps {
-                withSonarQubeEnv(installationName: 'sql'){
-                    sh './mvnw clean org. sonarsource.scanner-maven: sonar-maven-plugin: 3.9.0.2155:sonar'
+                withSonarQubeEnv('sql') {
+                    sh '''
+                        sonar-scanner \
+                          -Dsonar.projectKey=car_rental \
+                          -Dsonar.sources=. \
+                          -Dsonar.host.url=$SONAR_HOST_URL \
+                          -Dsonar.login=$SONAR_TOKEN \
+                          -Dsonar.language=py \
+                          -Dsonar.python.version=3.10
+                    '''
                 }
             }
         }
