@@ -16,7 +16,7 @@ pipeline {
 
         stage('SonarQube Analysis') {
             steps {
-                withSonarQubeEnv('sql') {
+                withSonarQubeEnv('sonarqube') {
                     sh '''
                         sonar-scanner \
                           -Dsonar.projectKey=car_rental \
