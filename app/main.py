@@ -1,18 +1,26 @@
+
+from encryption_utils import encrypt_answer, decrypt_answer
 from flask import Flask, render_template, redirect, url_for , flash
 import MySQLdb
 import base64
 from flask_weasyprint import HTML,render_pdf
 import re
 from flask_mail import Mail,Message
-from Crypto.Cipher import AES
+from dotenv import load_dotenv	
+
 from passlib.hash import pbkdf2_sha256
 from flask import request
 import datetime
 import time
 import os
+from Crypto.Random import get_random_bytes
+import base64
+
+
+load_dotenv()
 
 app = Flask(__name__)
-
+app.secret_key=os.getenv("FLASK_SECRET_KEY", "my_unobvious_default_key")
 
 
 app.config.update(
@@ -102,16 +110,8 @@ def adduser():
         # Hash password
         hash_password = pbkdf2_sha256.hash(password)
         # Encrypt answer correctly
-        raw_ans = security_ans
-        padded_ans = raw_ans.rjust(32).encode('utf-8')  # bytes
-        key_bytes = '1234567890123456'.encode('utf-8')    # 16-byte key
-        cipher = AES.new(key_bytes, AES.MODE_ECB)
-        encrypted = cipher.encrypt(padded_ans)           # bytes
-        ansEncoded = base64.b64encode(encrypted).decode('utf-8')  # str
-        # Send welcome email
-        msg = Message("Welcome to Car Rental Services", sender="Car Rental Services", recipients=[email])
-        msg.body = "Thank you for signing up for Car Rental Service, Now Book a Cab Now !!!"
-        mail.send(msg)
+        ansEncoded = encrypt_answer(security_ans)
+
         # Insert
         cursor.execute(
             """
@@ -230,110 +230,72 @@ def sign():
 
 #**********************************RESET PASSWORD-----------------------------------------------------------------------------------
 
-@app.route('/resetpassword/',methods=['GET','POST'])
-
+@app.route('/resetpassword/', methods=['GET', 'POST'])
 def resetdriver():
-	print("Entered")
-	return render_template("resetpassword.html")
+    print("Entered")
+    return render_template("resetpassword.html")
 
-@app.route('/reset/',methods=['GET','POST'])
-
+@app.route('/reset/', methods=['GET', 'POST'])
 def resetpasswordform():
-	cursor = conn.cursor()
-	secret_key = '1234567890123456'
-	uflag = False
-	aflag = False
-	cqflag = False
-	aqflag = False
-	reset_username = request.form["username"]
-	Lreset_username = str(reset_username)
-	Squestion = int(request.form["squestion"])
-	answer = request.form["answer"]
-	newpassword = request.form["password"]
-	
-	print(reset_username,Squestion,answer,newpassword)
-	
-	cursor.execute("""SELECT userId FROM Cust_User""")
-	usernames = cursor.fetchall()
-	usernames_list = list(usernames)
-	usernames_len = len(usernames_list)
-	for a in range(0,usernames_len):
-		if usernames_list[a][0] == Lreset_username:
-			uflag = True
-		
-	cursor.execute("""SELECT userId FROM Admin_User""")
-	usernames = cursor.fetchall()
-	usernames_list = list(usernames)
-	usernames_len = len(usernames_list)
-	for a in range(0,usernames_len):
-		if usernames_list[a][0] == Lreset_username:
-			aflag = True
-			
-	if aflag == False and uflag == False:
-		flash("Entered Username does not Exist !!!")
-		return render_template("resetpassword.html")
-			
-	cursor.execute("""SELECT reset_Question FROM Cust_User""")
-	Aquestions = cursor.fetchall()
-	Aquestion_list = list(Aquestions)
-	Aquestion_len = len(Aquestion_list)
-	print("SQUESTION",Squestion)
-	print("CUSTORMER")
-	for a in range(0,Aquestion_len):
-		print(Aquestion_list[a][0])
-		if Aquestion_list[a][0] == Squestion:
-			cqflag = True
-	
-	print("ADMIN")		
-	cursor.execute("""SELECT reset_Question FROM Admin_User""")
-	questions = cursor.fetchall()
-	question_list = list(questions)
-	question_len = len(question_list)
-	for a in range(0,question_len):
-		print(question_list[a][0])
-		if question_list[a][0] == Squestion:
-			aqflag = True
-			
+    from encryption_utils import decrypt_answer  # Make sure it's imported
 
-	"""if aqflag == False and cqflag == False:
-		flash("Invalid security question Selected, Please select correct Security question !!!")
-		return render_template("resetpassword.html")
-	print("Question = ",aqflag)
-	"""
-	if uflag == True:
-		cursor.execute("""SELECT reset_Ans_Type FROM Cust_User WHERE userId = %s""",[Lreset_username])
-		O_ans = cursor.fetchone()
-		Original_ans = O_ans[0]
-		print("Original ans : ",Original_ans)
-	
-	if aflag == True:
-		cursor.execute("""SELECT reset_Ans_Type FROM Admin_User WHERE userId = %s""",[Lreset_username])
-		O_ans = cursor.fetchone()
-		Original_ans = O_ans[0]
-		print("Original ans : ",Original_ans)
-		
-	cipher = AES.new(secret_key,AES.MODE_ECB)
-	decode1 = cipher.decrypt(base64.b64decode(Original_ans))
-	decoded = decode1.strip()
-	actual_ans = decoded.decode("utf-8")
-	
-	if actual_ans == answer:
-		print("CHECK PASSORD : ",newpassword)
-		hashednewpassword = pbkdf2_sha256.hash(newpassword)
-		if uflag == True:
-			cursor.execute("""UPDATE Cust_User SET password = %s WHERE userId = %s""",(hashednewpassword,Lreset_username))
-		if aflag == True:
-			cursor.execute("""UPDATE Admin_User SET password = %s WHERE userId = %s""",(hashednewpassword,Lreset_username))
-		conn.commit()
-		flash("Password Successfully Changed, Please Login Now !!!")
-		return render_template("signin.html")
-	else:
-		flash("Entered Security Answer is Wrong !!!")
-		return render_template("resetpassword.html")
-	#print("DECODED Question " ,actual_ans)
-	#resetp = cursor.fetchone()
-	#old_password = resetp[0]
-	#print("OLD PASSOWORD",old_password)
+    cursor = conn.cursor()
+    uflag = False
+    aflag = False
+
+    reset_username = request.form["username"]
+    Squestion = int(request.form["squestion"])
+    answer = request.form["answer"]
+    newpassword = request.form["password"]
+
+    print(reset_username, Squestion, answer, newpassword)
+
+    # Check if user exists in Cust_User
+    cursor.execute("SELECT userId FROM Cust_User")
+    cust_usernames = [row[0] for row in cursor.fetchall()]
+    if reset_username in cust_usernames:
+        uflag = True
+
+    # Check if user exists in Admin_User
+    cursor.execute("SELECT userId FROM Admin_User")
+    admin_usernames = [row[0] for row in cursor.fetchall()]
+    if reset_username in admin_usernames:
+        aflag = True
+
+    if not (uflag or aflag):
+        flash("Entered Username does not Exist !!!")
+        return render_template("resetpassword.html")
+
+    # Get encrypted answer
+    if uflag:
+        cursor.execute("SELECT reset_Ans_Type FROM Cust_User WHERE userId = %s", [reset_username])
+    else:
+        cursor.execute("SELECT reset_Ans_Type FROM Admin_User WHERE userId = %s", [reset_username])
+    
+    result = cursor.fetchone()
+    if not result:
+        flash("No security answer found for user.")
+        return render_template("resetpassword.html")
+    
+    Original_ans = result[0]
+    print("Original ans:", Original_ans)
+
+    # Decrypt answer using external utility
+    actual_ans = decrypt_answer(Original_ans)
+
+    if actual_ans == answer:
+        hashed_new_password = pbkdf2_sha256.hash(newpassword)
+        if uflag:
+            cursor.execute("UPDATE Cust_User SET password = %s WHERE userId = %s", (hashed_new_password, reset_username))
+        else:
+            cursor.execute("UPDATE Admin_User SET password = %s WHERE userId = %s", (hashed_new_password, reset_username))
+        conn.commit()
+        flash("Password Successfully Changed, Please Login Now !!!")
+        return render_template("signin.html")
+    else:
+        flash("Entered Security Answer is Wrong !!!")
+        return render_template("resetpassword.html")
+
 #--------------------------------------------BOOKING PAGE-----------------------------------------------------
 
 @app.route('/booking/',methods = ['GET','POST'])
