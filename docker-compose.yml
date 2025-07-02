@@ -1,17 +1,20 @@
 version: '3.8'
 
 services:
-    jenkins:
-      image: jenkins/jenkins:lts
-      privileged: true
-      user: root
-      ports:
-       - 8080:8080
-       - 50000:50000
+  jenkins:
+    image: jenkins/jenkins:lts
+    privileged: true
+    user: root
     container_name: jenkins
+    ports:
+      - 8080:8080
+      - 50000:50000
     volumes:
       - /home/${wassim}/jenkins_compose/jenkins_configuration:/var/jenkins_home
       - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - sonarqube
+
   web:
     build: .
     ports:
@@ -44,7 +47,7 @@ services:
       - "3306:3306"
     volumes:
       - ./db/car_rental_db.sql:/docker-entrypoint-initdb.d/car_rental_db.sql
-      
+
   sonarqube:
     image: sonarqube:latest
     container_name: sonarqube
