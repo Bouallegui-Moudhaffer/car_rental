@@ -1,9 +1,8 @@
-from flask import Flask, render_template, redirect, url_for , flash
+from flask import Flask, render_template, redirect, flash
 import MySQLdb
 import base64
-from flask_weasyprint import HTML,render_pdf
-import re
-from flask_mail import Mail,Message
+from flask_weasyprint import HTML, render_pdf
+from flask_mail import Mail, Message
 from Crypto.Cipher import AES
 from passlib.hash import pbkdf2_sha256
 from flask import request
@@ -14,28 +13,27 @@ import os
 app = Flask(__name__)
 
 
-
 app.config.update(
-  DEBUG=True,
-  MAIL_SERVER  = os.getenv("MAIL_SERVER", "mailhog"),
-  MAIL_PORT    = int(os.getenv("MAIL_PORT", 1025)),
-  MAIL_USE_TLS = False,
-  MAIL_USE_SSL = False,
-  MAIL_USERNAME= os.getenv("MAIL_USERNAME", ""),
-  MAIL_PASSWORD= os.getenv("MAIL_PASSWORD", "")
+    DEBUG=True,
+    MAIL_SERVER=os.getenv("MAIL_SERVER", "mailhog"),
+    MAIL_PORT=int(os.getenv("MAIL_PORT", 1025)),
+    MAIL_USE_TLS=False,
+    MAIL_USE_SSL=False,
+    MAIL_USERNAME=os.getenv("MAIL_USERNAME", ""),
+    MAIL_PASSWORD=os.getenv("MAIL_PASSWORD", ""),
 )
 
 
-#app.config.update(mail_settings)
+# app.config.update(mail_settings)
 mail = Mail(app)
 
-app.secret_key = 'my unobvious secret key'
+app.secret_key = "my unobvious secret key"
 
 conn = MySQLdb.connect(
     host=os.getenv("DB_HOST", "db"),
     user=os.getenv("DB_USER", "root"),
     passwd=os.getenv("DB_PASSWORD", "root"),
-    db=os.getenv("DB_NAME", "car_rental")
+    db=os.getenv("DB_NAME", "car_rental"),
 )
 cursor = conn.cursor()
 master_password = "REAPER"
@@ -46,21 +44,28 @@ payment_type = ""
 payment_status = ["Paid", "Not Paid"]
 b_actual_id = 0
 
+
 def checkstring(inputstring):
     return not any(char.isalpha() for char in inputstring)
-	
-#-----------------------------------------------FRONT PAGE -------------------------------------------------------
-@app.route("/",methods=['GET','POST'])
+
+
+# -----------------------------------------------FRONT PAGE --------------
+
+
+@app.route("/", methods=["GET", "POST"])
 def homepage():
-	return render_template("index.html")
-#---------------------------ADD New CUSTOMER ----------------------------------------------------------------------------
+    return render_template("index.html")
 
-@app.route('/addcustomer/', methods=['GET','POST'])
+
+# ---------------------------ADD New CUSTOMER ----------------------------
+
+
+@app.route("/addcustomer/", methods=["GET", "POST"])
 def register():
-    return render_template('addcustomer.html')
-	
+    return render_template("addcustomer.html")
 
-@app.route('/adduser/', methods=['GET','POST'])
+
+@app.route("/adduser/", methods=["GET", "POST"])
 def adduser():
     cursor = conn.cursor()
     try:
@@ -84,7 +89,7 @@ def adduser():
             return render_template("addcustomer.html")
         # Other validations
         email = request.form["email"]
-        if '@' not in email:
+        if "@" not in email:
             flash("Please Enter Valid Email  !!!")
             return render_template("addcustomer.html")
         phone = request.form["PhoneNumber"]
@@ -103,14 +108,20 @@ def adduser():
         hash_password = pbkdf2_sha256.hash(password)
         # Encrypt answer correctly
         raw_ans = security_ans
-        padded_ans = raw_ans.rjust(32).encode('utf-8')  # bytes
-        key_bytes = '1234567890123456'.encode('utf-8')    # 16-byte key
+        padded_ans = raw_ans.rjust(32).encode("utf-8")  # bytes
+        key_bytes = "1234567890123456".encode("utf-8")  # 16-byte key
         cipher = AES.new(key_bytes, AES.MODE_ECB)
-        encrypted = cipher.encrypt(padded_ans)           # bytes
-        ansEncoded = base64.b64encode(encrypted).decode('utf-8')  # str
+        encrypted = cipher.encrypt(padded_ans)  # bytes
+        ansEncoded = base64.b64encode(encrypted).decode("utf-8")  # str
         # Send welcome email
-        msg = Message("Welcome to Car Rental Services", sender="Car Rental Services", recipients=[email])
-        msg.body = "Thank you for signing up for Car Rental Service, Now Book a Cab Now !!!"
+        msg = Message(
+            "Welcome to Car Rental Services",
+            sender="Car Rental Services",
+            recipients=[email],
+        )
+        msg.body = (
+            "Thank you for signing up for Car Rental Service, Now Book a Cab Now !!!"
+        )
         mail.send(msg)
         # Insert
         cursor.execute(
@@ -120,429 +131,517 @@ def adduser():
              registration_Date, password, reset_Question, reset_Ans_Type)
             VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
             """,
-            (username, fname, lname, email, phone,
-             current_date3, hash_password,
-             str(security_question), ansEncoded)
+            (
+                username,
+                fname,
+                lname,
+                email,
+                phone,
+                current_date3,
+                hash_password,
+                str(security_question),
+                ansEncoded,
+            ),
         )
         conn.commit()
         cursor.close()
         flash("Successfully Registered !!! ")
-        return redirect('/login')
+        return redirect("/login")
     except Exception as e:
         return str(e)
-			
-			
-			
-#---------------------------------------END------------------------------------------------------
 
-#-------------------------------------LOGIN PAGE--------------------------------------------------------
-@app.route('/login')
 
+# ---------------------------------------END------------------------------------------------------
+
+
+# -------------------------------------LOGIN PAGE-------------------------
+@app.route("/login")
 def signin():
-	print("entered")
-	return render_template('signin.html')
-	
-	
-@app.route('/echo',methods=['POST'])
+    print("entered")
+    return render_template("signin.html")
 
+
+@app.route("/echo", methods=["POST"])
 def sign():
-	Cinflag = False
-	Ainflag = False
-	admin_password_match = False
-	cust_password_match = False
-	A = "Admin"
-	C = "Customer"
-	user_rating = ""
-	current_day = ""
-	current_month = ""
-	current_year = "" 
-	current = datetime.datetime.now()
-	current_day = str(current.day)
-	current_month = str(current.month)
-	current_year = str(current.year)
-	current_date4 = current_day + "-" + current_month + "-" + current_year
-	print("entered")
-	cursor = conn.cursor()
-	Username_to_string = ""
-	Username = request.form['Username']
-	Password = request.form['Password']
-	cursor.execute("""SELECT userId FROM Cust_User """)
-	cust_actual_usernames = cursor.fetchall()
-	cust_actual_usernames_list = list(cust_actual_usernames)
-	cust_length = len(cust_actual_usernames_list)
-	Username_to_string1 = Username
-	print(cust_actual_usernames)
-	for a in range(0,cust_length):
-		if cust_actual_usernames_list[a][0] == Username_to_string1:
-			Cinflag = True
-	
-	#user_present = Username_to_string in actual_usernames
-	
-	cursor.execute("""SELECT userId FROM Admin_User """)
-	admin_actual_usernames = cursor.fetchall()
-	admin_actual_usernames_list = list(admin_actual_usernames)
-	admin_length = len(admin_actual_usernames_list)
-	Username_to_string2 = Username
-	print(admin_actual_usernames)
-	for a in range(0,admin_length):
-		if admin_actual_usernames_list[a][0] == Username_to_string2:
-			Ainflag = True
-			
-	if Cinflag == True:
-		print("CUSTUser is present")
-		cursor.execute("""SELECT password FROM Cust_User WHERE userId =%s""",[Username])
-		cust_actual_password = cursor.fetchone()
-		cust_password_match = pbkdf2_sha256.verify(Password,cust_actual_password[0])
-	elif Ainflag == True:
-		print("ADMINUser is present")
-		cursor.execute("""SELECT password FROM Admin_User WHERE userId =%s""",[Username])
-		admin_actual_password = cursor.fetchone()
-		admin_password_match = pbkdf2_sha256.verify(Password,admin_actual_password[0]) 
-	else:
-		flash("Sorry Username Invalid !!!")
-		return render_template("signin.html")
-		
-	
-	
-	
-	
-	
-	#cursor.close()
-	if cust_password_match == True:
-		current_time = time.strftime("%X")
-		cursor.execute("""INSERT INTO Login_History(user,userId,Date,Time) values(%s,%s,%s,%s)""",(C,Username,current_date4,current_time))
-		conn.commit()
-		global custid
-		custid = Username[:]
-		flash("Login Sucessfull, Now Book a Cab !!!")
-		return render_template("booking.html")
-		print("CUSTOMER TRUE")
-	elif admin_password_match == True:
-		current_time = time.strftime("%X")
-		cursor.execute("""INSERT INTO Login_History(user,userId,Date,Time) values(%s,%s,%s,%s)""",(A,Username,current_date4,current_time))
-		conn.commit()
-		flash("Welcome Admin !!!")
-		return redirect("/adminpage")
-		print("ADMIN TRUE")
-	else:
-		flash("Password Incorrect")
-		return render_template("signin.html")
+    Cinflag = False
+    Ainflag = False
+    admin_password_match = False
+    cust_password_match = False
+    A = "Admin"
+    C = "Customer"
+    current_day = ""
+    current_month = ""
+    current_year = ""
+    current = datetime.datetime.now()
+    current_day = str(current.day)
+    current_month = str(current.month)
+    current_year = str(current.year)
+    current_date4 = current_day + "-" + current_month + "-" + current_year
+    print("entered")
+    cursor = conn.cursor()
+    Username = request.form["Username"]
+    Password = request.form["Password"]
+    cursor.execute("""SELECT userId FROM Cust_User """)
+    cust_actual_usernames = cursor.fetchall()
+    cust_actual_usernames_list = list(cust_actual_usernames)
+    cust_length = len(cust_actual_usernames_list)
+    Username_to_string1 = Username
+    print(cust_actual_usernames)
+    for a in range(0, cust_length):
+        if cust_actual_usernames_list[a][0] == Username_to_string1:
+            Cinflag = True
 
-#**********************************RESET PASSWORD-----------------------------------------------------------------------------------
+    # user_present = Username_to_string in actual_usernames
 
-@app.route('/resetpassword/',methods=['GET','POST'])
+    cursor.execute("""SELECT userId FROM Admin_User """)
+    admin_actual_usernames = cursor.fetchall()
+    admin_actual_usernames_list = list(admin_actual_usernames)
+    admin_length = len(admin_actual_usernames_list)
+    Username_to_string2 = Username
+    print(admin_actual_usernames)
+    for a in range(0, admin_length):
+        if admin_actual_usernames_list[a][0] == Username_to_string2:
+            Ainflag = True
 
+    if Cinflag:
+        print("CUSTUser is present")
+        cursor.execute(
+            """SELECT password FROM Cust_User WHERE userId =%s""", [Username]
+        )
+        cust_actual_password = cursor.fetchone()
+        cust_password_match = pbkdf2_sha256.verify(
+            Password, cust_actual_password[0])
+    elif Ainflag:
+        print("ADMINUser is present")
+        cursor.execute(
+            """SELECT password FROM Admin_User WHERE userId =%s""", [Username]
+        )
+        admin_actual_password = cursor.fetchone()
+        admin_password_match = pbkdf2_sha256.verify(
+            Password, admin_actual_password[0])
+    else:
+        flash("Sorry Username Invalid !!!")
+        return render_template("signin.html")
+
+    # cursor.close()
+    if cust_password_match:
+        current_time = time.strftime("%X")
+        cursor.execute(
+            """INSERT INTO Login_History(user,userId,Date,Time) values(%s,%s,%s,%s)""",
+            (C, Username, current_date4, current_time),
+        )
+        conn.commit()
+        global custid
+        custid = Username[:]
+        flash("Login Sucessfull, Now Book a Cab !!!")
+        return render_template("booking.html")
+        print("CUSTOMER TRUE")
+    elif admin_password_match:
+        current_time = time.strftime("%X")
+        cursor.execute(
+            """INSERT INTO Login_History(user,userId,Date,Time) values(%s,%s,%s,%s)""",
+            (A, Username, current_date4, current_time),
+        )
+        conn.commit()
+        flash("Welcome Admin !!!")
+        return redirect("/adminpage")
+        print("ADMIN TRUE")
+    else:
+        flash("Password Incorrect")
+        return render_template("signin.html")
+
+
+# **********************************RESET PASSWORD------------------------
+
+
+@app.route("/resetpassword/", methods=["GET", "POST"])
 def resetdriver():
-	print("Entered")
-	return render_template("resetpassword.html")
+    print("Entered")
+    return render_template("resetpassword.html")
 
-@app.route('/reset/',methods=['GET','POST'])
 
+@app.route("/reset/", methods=["GET", "POST"])
 def resetpasswordform():
-	cursor = conn.cursor()
-	secret_key = '1234567890123456'
-	uflag = False
-	aflag = False
-	cqflag = False
-	aqflag = False
-	reset_username = request.form["username"]
-	Lreset_username = str(reset_username)
-	Squestion = int(request.form["squestion"])
-	answer = request.form["answer"]
-	newpassword = request.form["password"]
-	
-	print(reset_username,Squestion,answer,newpassword)
-	
-	cursor.execute("""SELECT userId FROM Cust_User""")
-	usernames = cursor.fetchall()
-	usernames_list = list(usernames)
-	usernames_len = len(usernames_list)
-	for a in range(0,usernames_len):
-		if usernames_list[a][0] == Lreset_username:
-			uflag = True
-		
-	cursor.execute("""SELECT userId FROM Admin_User""")
-	usernames = cursor.fetchall()
-	usernames_list = list(usernames)
-	usernames_len = len(usernames_list)
-	for a in range(0,usernames_len):
-		if usernames_list[a][0] == Lreset_username:
-			aflag = True
-			
-	if aflag == False and uflag == False:
-		flash("Entered Username does not Exist !!!")
-		return render_template("resetpassword.html")
-			
-	cursor.execute("""SELECT reset_Question FROM Cust_User""")
-	Aquestions = cursor.fetchall()
-	Aquestion_list = list(Aquestions)
-	Aquestion_len = len(Aquestion_list)
-	print("SQUESTION",Squestion)
-	print("CUSTORMER")
-	for a in range(0,Aquestion_len):
-		print(Aquestion_list[a][0])
-		if Aquestion_list[a][0] == Squestion:
-			cqflag = True
-	
-	print("ADMIN")		
-	cursor.execute("""SELECT reset_Question FROM Admin_User""")
-	questions = cursor.fetchall()
-	question_list = list(questions)
-	question_len = len(question_list)
-	for a in range(0,question_len):
-		print(question_list[a][0])
-		if question_list[a][0] == Squestion:
-			aqflag = True
-			
+    cursor = conn.cursor()
+    secret_key = "1234567890123456"
+    uflag = False
+    aflag = False
+    reset_username = request.form["username"]
+    Lreset_username = str(reset_username)
+    Squestion = int(request.form["squestion"])
+    answer = request.form["answer"]
+    newpassword = request.form["password"]
 
-	"""if aqflag == False and cqflag == False:
+    print(reset_username, Squestion, answer, newpassword)
+
+    cursor.execute("""SELECT userId FROM Cust_User""")
+    usernames = cursor.fetchall()
+    usernames_list = list(usernames)
+    usernames_len = len(usernames_list)
+    for a in range(0, usernames_len):
+        if usernames_list[a][0] == Lreset_username:
+            uflag = True
+
+    cursor.execute("""SELECT userId FROM Admin_User""")
+    usernames = cursor.fetchall()
+    usernames_list = list(usernames)
+    usernames_len = len(usernames_list)
+    for a in range(0, usernames_len):
+        if usernames_list[a][0] == Lreset_username:
+            aflag = True
+
+    if aflag == False and uflag == False:
+        flash("Entered Username does not Exist !!!")
+        return render_template("resetpassword.html")
+
+    cursor.execute("""SELECT reset_Question FROM Cust_User""")
+    Aquestions = cursor.fetchall()
+    Aquestion_list = list(Aquestions)
+    Aquestion_len = len(Aquestion_list)
+    print("SQUESTION", Squestion)
+    print("CUSTORMER")
+    for a in range(0, Aquestion_len):
+        print(Aquestion_list[a][0])
+        if Aquestion_list[a][0] == Squestion:
+            pass
+
+    print("ADMIN")
+    cursor.execute("""SELECT reset_Question FROM Admin_User""")
+    questions = cursor.fetchall()
+    question_list = list(questions)
+    question_len = len(question_list)
+    for a in range(0, question_len):
+        print(question_list[a][0])
+        if question_list[a][0] == Squestion:
+            pass
+
+    """if aqflag == False and cqflag == False:
 		flash("Invalid security question Selected, Please select correct Security question !!!")
 		return render_template("resetpassword.html")
 	print("Question = ",aqflag)
 	"""
-	if uflag == True:
-		cursor.execute("""SELECT reset_Ans_Type FROM Cust_User WHERE userId = %s""",[Lreset_username])
-		O_ans = cursor.fetchone()
-		Original_ans = O_ans[0]
-		print("Original ans : ",Original_ans)
-	
-	if aflag == True:
-		cursor.execute("""SELECT reset_Ans_Type FROM Admin_User WHERE userId = %s""",[Lreset_username])
-		O_ans = cursor.fetchone()
-		Original_ans = O_ans[0]
-		print("Original ans : ",Original_ans)
-		
-	cipher = AES.new(secret_key,AES.MODE_ECB)
-	decode1 = cipher.decrypt(base64.b64decode(Original_ans))
-	decoded = decode1.strip()
-	actual_ans = decoded.decode("utf-8")
-	
-	if actual_ans == answer:
-		print("CHECK PASSORD : ",newpassword)
-		hashednewpassword = pbkdf2_sha256.hash(newpassword)
-		if uflag == True:
-			cursor.execute("""UPDATE Cust_User SET password = %s WHERE userId = %s""",(hashednewpassword,Lreset_username))
-		if aflag == True:
-			cursor.execute("""UPDATE Admin_User SET password = %s WHERE userId = %s""",(hashednewpassword,Lreset_username))
-		conn.commit()
-		flash("Password Successfully Changed, Please Login Now !!!")
-		return render_template("signin.html")
-	else:
-		flash("Entered Security Answer is Wrong !!!")
-		return render_template("resetpassword.html")
-	#print("DECODED Question " ,actual_ans)
-	#resetp = cursor.fetchone()
-	#old_password = resetp[0]
-	#print("OLD PASSOWORD",old_password)
-#--------------------------------------------BOOKING PAGE-----------------------------------------------------
+    if uflag:
+        cursor.execute(
+            """SELECT reset_Ans_Type FROM Cust_User WHERE userId = %s""",
+            [Lreset_username],
+        )
+        O_ans = cursor.fetchone()
+        Original_ans = O_ans[0]
+        print("Original ans : ", Original_ans)
 
-@app.route('/booking/',methods = ['GET','POST'])
+    if aflag:
+        cursor.execute(
+            """SELECT reset_Ans_Type FROM Admin_User WHERE userId = %s""",
+            [Lreset_username],
+        )
+        O_ans = cursor.fetchone()
+        Original_ans = O_ans[0]
+        print("Original ans : ", Original_ans)
+
+    cipher = AES.new(secret_key, AES.MODE_ECB)
+    decode1 = cipher.decrypt(base64.b64decode(Original_ans))
+    decoded = decode1.strip()
+    actual_ans = decoded.decode("utf-8")
+
+    if actual_ans == answer:
+        print("CHECK PASSORD : ", newpassword)
+        hashednewpassword = pbkdf2_sha256.hash(newpassword)
+        if uflag:
+            cursor.execute(
+                """UPDATE Cust_User SET password = %s WHERE userId = %s""",
+                (hashednewpassword, Lreset_username),
+            )
+        if aflag:
+            cursor.execute(
+                """UPDATE Admin_User SET password = %s WHERE userId = %s""",
+                (hashednewpassword, Lreset_username),
+            )
+        conn.commit()
+        flash("Password Successfully Changed, Please Login Now !!!")
+        return render_template("signin.html")
+    else:
+        flash("Entered Security Answer is Wrong !!!")
+        return render_template("resetpassword.html")
+    # print("DECODED Question " ,actual_ans)
+    # resetp = cursor.fetchone()
+    # old_password = resetp[0]
+    # print("OLD PASSOWORD",old_password)
+
+
+# --------------------------------------------BOOKING PAGE----------------
+
+
+@app.route("/booking/", methods=["GET", "POST"])
 def bookingdriver():
-	
-	print("entered")
-	#booking()
-	return render_template('booking.html')
-	
-	
-@app.route('/bookingNow/',methods = ['GET','POST'])
+    print("entered")
+    # booking()
+    return render_template("booking.html")
 
 
+@app.route("/bookingNow/", methods=["GET", "POST"])
 def booking():
-	print("entered")
-	cabs_list = ["Hatchback","Sedan","SUV"]
-	buflag = False
-	try:
-		cab_route = ['Nashik-Pune','Nashik-Mumbai','Nashik-Nagpur','Nashik-Dhule','Nashik-Aurangabad']
-		car_empty = False
-		driver_empty = False
-		userId=request.form["userId"]
-		cursor.execute("""SELECT userId FROM Cust_User""")
-		busernames = cursor.fetchall()
-		busernames_list = list(busernames)
-		busernames_len = len(busernames_list)
-		for a in range(0,busernames_len):
-			if busernames_list[a][0] == userId:
-				buflag = True
-		if buflag == False:
-			flash("Entered Username does not Exist !!!")
-			return render_template('booking.html')
-		
-		#userId = userId.encode(userId.originalEncoding)
-		cursor.execute("""SELECT fName,lName,emailId,phone FROM Cust_User WHERE userId = %s""",[userId])
-		custinfo = cursor.fetchall()
-		custinfo_list = list(custinfo)
-		print(custinfo_list)
-		fname = custinfo_list[0][0]
-		lname = custinfo_list[0][1]
-		email = custinfo_list[0][2]
-		phone = custinfo_list[0][3]
-		print(fname,lname,email,phone)
-		'''fname = request.form["fName"]
+    print("entered")
+    cabs_list = ["Hatchback", "Sedan", "SUV"]
+    buflag = False
+    try:
+        cab_route = [
+            "Nashik-Pune",
+            "Nashik-Mumbai",
+            "Nashik-Nagpur",
+            "Nashik-Dhule",
+            "Nashik-Aurangabad",
+        ]
+        userId = request.form["userId"]
+        cursor.execute("""SELECT userId FROM Cust_User""")
+        busernames = cursor.fetchall()
+        busernames_list = list(busernames)
+        busernames_len = len(busernames_list)
+        for a in range(0, busernames_len):
+            if busernames_list[a][0] == userId:
+                buflag = True
+        if not buflag:
+            flash("Entered Username does not Exist !!!")
+            return render_template("booking.html")
+
+        # userId = userId.encode(userId.originalEncoding)
+        cursor.execute(
+            """SELECT fName,lName,emailId,phone FROM Cust_User WHERE userId = %s""",
+            [userId],
+        )
+        custinfo = cursor.fetchall()
+        custinfo_list = list(custinfo)
+        print(custinfo_list)
+        fname = custinfo_list[0][0]
+        lname = custinfo_list[0][1]
+        email = custinfo_list[0][2]
+        phone = custinfo_list[0][3]
+        print(fname, lname, email, phone)
+        """fname = request.form["fName"]
 		print(fname)
 		lname = request.form["lName"]
 		phone = request.form["PhoneNumber"]
-		email = request.form["email"]	'''
-		cab1 = request.form["cab"]
-		cab = int(cab1)
-		print(userId,fname,lname,phone,email,cab)
-		cab_name = ""
-		route = ""
-		cab_name = cabs_list[cab]
-		startDate = request.form["startDate"]
-		endDate = request.form["endDate"]
-		time = request.form["time"]
-		carroute = int(request.form["route"])
-		route = cab_route[carroute]
-		pickupLocation = request.form["pickupLocation"]
-		dropoffLocation = request.form["dropoffLocation"]
-		pricePerKm = 10;
-		car_name = cabs_list[cab]
-	
-		print(userId,fname,lname,phone,email,cab,startDate,endDate,time,pickupLocation,dropoffLocation,route)
-		
-		cursor.execute("""SELECT Car_id FROM Car WHERE status = 'Available' and Car_type = %s """,[car_name])
-		car = cursor.fetchall()
-		if car:
-			print('Structure is not empty.')
-			car_empty = False
-		else:
-			print('Structure is empty.')
-			return redirect('/allbooked')
-			car_empty =  True
-		print("CAR NAME ",car)
-		carid = car[0][0]
-		
-		cursor.execute("""SELECT driverId FROM Driver WHERE status = 'Available' """)
-		driver = cursor.fetchall()
-		if driver:
-			print('Structure is not empty.')
-			car_empty = False
-		else:
-			print('Structure is empty.')
-			return redirect('/allbooked')
-			car_empty =  True
-		driverid = driver[0][0]
-		
-		print("NULL CARID" ,carid)
-		print("NULL driverid",driverid)
-		cursor.execute("""UPDATE Car SET status = "BOOKED" WHERE Car_id = %s""",[carid])
-		#print("DRIVER ID : ",driverid)
-		global CARID
-		CARID = carid[:]
-		global driverID
-		driverID = driverid
-		
-		cursor.execute("""UPDATE Driver SET status = "BOOKED" WHERE driverId = %s""",[driverid])
-		print("DRIVER ID : ",driverid)
-		cursor.execute("""INSERT INTO Booking(userId,Cab,startDate,endDate,Pickup_time,Pickup_location,Drop_off_location,driverId,carid,cab_route) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",(userId,cab_name,startDate,endDate,time,pickupLocation,dropoffLocation,driverid,carid,route)) 
-		
-		conn.commit()
-		global b_actual_id
-		cursor.execute("""select bookingId from Booking where Pickup_time=%s and startDate=%s """,[time,startDate])
-		b_id=cursor.fetchall()
-		b_actual_id=b_id[0][0]
-		print(b_actual_id)  
-		print ("Booked")
-		print ("Booked")
-		
-		return redirect("/payment")
-		
-	except Exception as e:
-		return(str(e))
-#--------------------------------------------------BOOKING PAGE ENDS------------------------------------------------------------------------------
+		email = request.form["email"]	"""
+        cab1 = request.form["cab"]
+        cab = int(cab1)
+        print(userId, fname, lname, phone, email, cab)
+        cab_name = ""
+        route = ""
+        cab_name = cabs_list[cab]
+        startDate = request.form["startDate"]
+        endDate = request.form["endDate"]
+        time = request.form["time"]
+        carroute = int(request.form["route"])
+        route = cab_route[carroute]
+        pickupLocation = request.form["pickupLocation"]
+        dropoffLocation = request.form["dropoffLocation"]
+        car_name = cabs_list[cab]
 
-#------------------------------------------------DISPLAY BOOKING ------------------------------------------------------------------
+        print(
+            userId,
+            fname,
+            lname,
+            phone,
+            email,
+            cab,
+            startDate,
+            endDate,
+            time,
+            pickupLocation,
+            dropoffLocation,
+            route,
+        )
 
-@app.route("/displaybooking/",methods=['GET','POST'])
+        cursor.execute(
+            """SELECT Car_id FROM Car WHERE status = 'Available' and Car_type = %s """,
+            [car_name],
+        )
+        car = cursor.fetchall()
+        if car:
+            print("Structure is not empty.")
+        else:
+            print("Structure is empty.")
+            return redirect("/allbooked")
+        print("CAR NAME ", car)
+        carid = car[0][0]
 
+        cursor.execute(
+            """SELECT driverId FROM Driver WHERE status = 'Available' """)
+        driver = cursor.fetchall()
+        if driver:
+            print("Structure is not empty.")
+        else:
+            print("Structure is empty.")
+            return redirect("/allbooked")
+        driverid = driver[0][0]
+
+        print("NULL CARID", carid)
+        print("NULL driverid", driverid)
+        cursor.execute(
+            """UPDATE Car SET status = "BOOKED" WHERE Car_id = %s""", [carid]
+        )
+        # print("DRIVER ID : ",driverid)
+        global CARID
+        CARID = carid[:]
+        global driverID
+        driverID = driverid
+
+        cursor.execute(
+            """UPDATE Driver SET status = "BOOKED" WHERE driverId = %s""",
+            [driverid])
+        print("DRIVER ID : ", driverid)
+        cursor.execute(
+            """INSERT INTO Booking(userId,Cab,startDate,endDate,Pickup_time,Pickup_location,Drop_off_location,driverId,carid,cab_route) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+            (userId,
+             cab_name,
+             startDate,
+             endDate,
+             time,
+             pickupLocation,
+             dropoffLocation,
+             driverid,
+             carid,
+             route,
+             ),
+        )
+
+        conn.commit()
+        global b_actual_id
+        cursor.execute(
+            """select bookingId from Booking where Pickup_time=%s and startDate=%s """, [
+                time, startDate], )
+        b_id = cursor.fetchall()
+        b_actual_id = b_id[0][0]
+        print(b_actual_id)
+        print("Booked")
+        print("Booked")
+
+        return redirect("/payment")
+
+    except Exception as e:
+        return str(e)
+
+
+# --------------------------------------------------BOOKING PAGE ENDS-----
+
+# ------------------------------------------------DISPLAY BOOKING --------
+
+
+@app.route("/displaybooking/", methods=["GET", "POST"])
 def displaybooking():
-	cursor = conn.cursor()
-	cursor.execute("""SELECT * FROM Booking""")
-	data5 = cursor.fetchall()
-	cursor.close()
-	
-	return render_template("displaybooking.html",data = data5)
-	
-#--------------------------------------------DISPLAY BOOKING END--------------------------------------------------------------------
-#--------------------------------------------ADMIN PAGE -------------------------------------------------------------
-@app.route('/adminpage/',methods=['GET','POST'])
+    cursor = conn.cursor()
+    cursor.execute("""SELECT * FROM Booking""")
+    data5 = cursor.fetchall()
+    cursor.close()
 
+    return render_template("displaybooking.html", data=data5)
+
+
+# --------------------------------------------DISPLAY BOOKING END---------
+# --------------------------------------------ADMIN PAGE -----------------
+
+
+@app.route("/adminpage/", methods=["GET", "POST"])
 def adminpage():
-	print("Entered") 	#Testing
-	
-	return render_template("adminpage.html")
-#---------------------------------END ADMIN PAGE-----------------------------------------------
+    print("Entered")  # Testing
 
-#----------------------------------LOGIN HISTORY----------------------------------------------
-@app.route("/logindetails/",methods=['GET','POST'])
+    return render_template("adminpage.html")
 
+
+# ---------------------------------END ADMIN PAGE-------------------------
+
+# ----------------------------------LOGIN HISTORY-------------------------
+
+
+@app.route("/logindetails/", methods=["GET", "POST"])
 def logindetails():
-	cursor = conn.cursor()
-	cursor.execute("""SELECT * FROM Login_History""")
-	data5 = cursor.fetchall()
-	cursor.close()
-	
-	return render_template("loginhistory.html",data = data5)
-#------------------------------------FEEDBACK FORM------------------------------------------------------------
+    cursor = conn.cursor()
+    cursor.execute("""SELECT * FROM Login_History""")
+    data5 = cursor.fetchall()
+    cursor.close()
 
-@app.route('/feedback/',methods=['GET','POST'])
+    return render_template("loginhistory.html", data=data5)
 
+
+# ------------------------------------FEEDBACK FORM-----------------------
+
+
+@app.route("/feedback/", methods=["GET", "POST"])
 def feedbackdriver():
-	print("Entered") 	#Testing
-	
-	return render_template("feedback.html")
-	
+    print("Entered")  # Testing
 
-@app.route('/addfeedback/',methods=['GET','POST'])
+    return render_template("feedback.html")
 
+
+@app.route("/addfeedback/", methods=["GET", "POST"])
 def feedbackform():
-	cursor = conn.cursor()
-	actual_ratings = ['Excellent','Good','Neutral','Poor']  #actual rating present in website
-	user_rating = ""
-	current_day = ""
-	current_month = ""
-	current_year = "" 
-	current = datetime.datetime.now()
-	current_day = str(current.day)
-	current_month = str(current.month)
-	current_year = str(current.year)
-	current_date = current_day + "-" + current_month + "-" + current_year
-	print("Date of today = ",current_date)
-	print("Entered123")		#Testing
-	rating = request.form["view"]
-	int_rating = int(rating)           #Convert string into int
-	comments = request.form["comments"]
-	username = request.form["userid"]
-	email = request.form["email"]
+    cursor = conn.cursor()
+    actual_ratings = [
+        "Excellent",
+        "Good",
+        "Neutral",
+        "Poor",
+    ]  # actual rating present in website
+    user_rating = ""
+    current_day = ""
+    current_month = ""
+    current_year = ""
+    current = datetime.datetime.now()
+    current_day = str(current.day)
+    current_month = str(current.month)
+    current_year = str(current.year)
+    current_date = current_day + "-" + current_month + "-" + current_year
+    print("Date of today = ", current_date)
+    print("Entered123")  # Testing
+    rating = request.form["view"]
+    int_rating = int(rating)  # Convert string into int
+    comments = request.form["comments"]
+    username = request.form["userid"]
+    email = request.form["email"]
 
-	cursor.execute("""SELECT fName,lName from Cust_User WHERE userId = %s""",[username])
-	name = cursor.fetchall()
-	fname = name[0][0]
-	lname = name[0][1]
-	print("FNAME : ",fname)
-	print("LNAME : ",lname)
-	"""cursor.execute(""SELECT username from login where email = %s"",[email])
+    cursor.execute(
+        """SELECT fName,lName from Cust_User WHERE userId = %s""", [username]
+    )
+    name = cursor.fetchall()
+    fname = name[0][0]
+    lname = name[0][1]
+    print("FNAME : ", fname)
+    print("LNAME : ", lname)
+    """cursor.execute(""SELECT username from login where email = %s"",[email])
 	username1 = cursor.fetchall()
 	username2  = username1[0]
 	print("Username : ",username2) """
-	print("intRATING:",int_rating)
-	user_rating = actual_ratings[int_rating]	#selecting user rating
-	
-	print(user_rating,comments,name,email)
-	cursor.execute("""INSERT INTO Feedback(userId,fName,lName,emailId,rating,comments,Date) values (%s,%s,%s,%s,%s,%s,%s)""",(username,fname,lname,email,user_rating,comments,current_date))
-	#cursor.execute("""INSERT INTO Feedback(rating,comment,name,email,date) VALUES (%s,%s,%s,%s,%s)""",(user_rating,comments,name,email,current_date)) 
-	
-	conn.commit()
-	flash("Feedback Successfully Send !!!")
-	cursor.close()
-	return render_template("feedback.html")
-#---------------------------------------------------FEEDBACK FORM END-------------------------------------------------------------------
-#-------------------------------------------------ADD ADMIN-------------------------------------------------------------------------------------
-@app.route('/addadmin/', methods=['GET','POST'])
-def addadmindriver():
-    return render_template('addadmin.html')
+    print("intRATING:", int_rating)
+    user_rating = actual_ratings[int_rating]  # selecting user rating
 
-@app.route('/addADMIN/', methods=['GET','POST'])
+    print(user_rating, comments, name, email)
+    cursor.execute(
+        """INSERT INTO Feedback(userId,fName,lName,emailId,rating,comments,Date) values (%s,%s,%s,%s,%s,%s,%s)""",
+        (username,
+         fname,
+         lname,
+         email,
+         user_rating,
+         comments,
+         current_date),
+    )
+    # cursor.execute("""INSERT INTO Feedback(rating,comment,name,email,date) VALUES (%s,%s,%s,%s,%s)""",(user_rating,comments,name,email,current_date))
+
+    conn.commit()
+    flash("Feedback Successfully Send !!!")
+    cursor.close()
+    return render_template("feedback.html")
+
+
+# ---------------------------------------------------FEEDBACK FORM END----
+# -------------------------------------------------ADD ADMIN--------------
+
+
+@app.route("/addadmin/", methods=["GET", "POST"])
+def addadmindriver():
+    return render_template("addadmin.html")
+
+
+@app.route("/addADMIN/", methods=["GET", "POST"])
 def addadmin():
     cursor = conn.cursor()
     try:
@@ -568,11 +667,11 @@ def addadmin():
         hash_password = pbkdf2_sha256.hash(password)
         # Encrypt answer
         raw_ans = security_ans
-        padded_ans = raw_ans.rjust(32).encode('utf-8')
-        key_bytes = '1234567890123456'.encode('utf-8')
+        padded_ans = raw_ans.rjust(32).encode("utf-8")
+        key_bytes = "1234567890123456".encode("utf-8")
         cipher = AES.new(key_bytes, AES.MODE_ECB)
         encrypted = cipher.encrypt(padded_ans)
-        ansEncoded = base64.b64encode(encrypted).decode('utf-8')
+        ansEncoded = base64.b64encode(encrypted).decode("utf-8")
         # Insert
         cursor.execute(
             """
@@ -581,254 +680,289 @@ def addadmin():
              registration_Date, password, reset_Question, reset_Ans_Type)
             VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
             """,
-            (username, fname, lname, email, phone,
-             current_date, hash_password,
-             str(security_question), ansEncoded)
+            (
+                username,
+                fname,
+                lname,
+                email,
+                phone,
+                current_date,
+                hash_password,
+                str(security_question),
+                ansEncoded,
+            ),
         )
         conn.commit()
         cursor.close()
         flash("Admin Successfully Registered !!! ")
-        return render_template('addadmin.html')
+        return render_template("addadmin.html")
     except Exception as e:
         return str(e)
-			
 
-#-----------------------------------------------DISPLAY ADMIN DETAILS-------------------------------------------------------------------------------
-@app.route("/admindetails/",methods=['GET','POST'])
 
+# -----------------------------------------------DISPLAY ADMIN DETAILS----
+@app.route("/admindetails/", methods=["GET", "POST"])
 def admindetails():
-	cursor = conn.cursor()
-	cursor.execute("""SELECT * FROM Admin_User""")
-	data = cursor.fetchall()
-	cursor.close()
-	
-	return render_template("admindetails.html",data = data)
-#------------------------------------------------DISPLAY ADMIN ENDS--------------------------------------------------------------------------
+    cursor = conn.cursor()
+    cursor.execute("""SELECT * FROM Admin_User""")
+    data = cursor.fetchall()
+    cursor.close()
 
-#------------------------------------------------DELETE ADMIN---------------------------------------------------------------------------------------
-@app.route("/deleteadmin/",methods=['GET','POST'])
+    return render_template("admindetails.html", data=data)
 
+
+# ------------------------------------------------DISPLAY ADMIN ENDS------
+
+# ------------------------------------------------DELETE ADMIN------------
+
+
+@app.route("/deleteadmin/", methods=["GET", "POST"])
 def deleteadmindriver():
-	return render_template("deleteadmin.html")	
-	
-@app.route("/deleteADMIN/",methods=['GET','POST'])
+    return render_template("deleteadmin.html")
 
+
+@app.route("/deleteADMIN/", methods=["GET", "POST"])
 def deleteadmin():
-	cursor = conn.cursor()
-	mpassword = request.form["mpassword"]
-	dusername = str(request.form["dusername"])
-	husername = request.form["husername"]
-	adflag = False
-	cursor.execute("""SELECT userId FROM Admin_User""")
-	usernamesad = cursor.fetchall()
-	usernames_listad = list(usernamesad)
-	usernames_lenad = len(usernames_listad)
-	for a in range(0,usernames_lenad):
-		if usernames_listad[a][0] == dusername:
-			adflag = True
-	if adflag == False:
-		flash("Entered Username does not Exist !!!")
-		return render_template("deleteadmin.html")
-		
-	if master_password == mpassword:
-		cursor.execute("""DELETE FROM Admin_User WHERE userId = %s""",[dusername])
-		conn.commit()
-		print(mpassword,dusername,husername)
-		flash("Admin Successfully Deleted !!!")
-		return render_template("deleteadmin.html")
-	else:
-		flash("Incorrect Master Password !!!")
-		return render_template("deleteadmin.html")
-		
-		
-#------------------------------------------END DELETE ADMIN ----------------------------------------------------------------------
-#----------------------------------------FEEDBACK DISPLAY-----------------------------------------------------------------------
+    cursor = conn.cursor()
+    mpassword = request.form["mpassword"]
+    dusername = str(request.form["dusername"])
+    husername = request.form["husername"]
+    adflag = False
+    cursor.execute("""SELECT userId FROM Admin_User""")
+    usernamesad = cursor.fetchall()
+    usernames_listad = list(usernamesad)
+    usernames_lenad = len(usernames_listad)
+    for a in range(0, usernames_lenad):
+        if usernames_listad[a][0] == dusername:
+            adflag = True
+    if not adflag:
+        flash("Entered Username does not Exist !!!")
+        return render_template("deleteadmin.html")
 
-@app.route("/feedbackdisplay/",methods=['GET','POST'])
+    if master_password == mpassword:
+        cursor.execute(
+            """DELETE FROM Admin_User WHERE userId = %s""",
+            [dusername])
+        conn.commit()
+        print(mpassword, dusername, husername)
+        flash("Admin Successfully Deleted !!!")
+        return render_template("deleteadmin.html")
+    else:
+        flash("Incorrect Master Password !!!")
+        return render_template("deleteadmin.html")
 
+
+# ------------------------------------------END DELETE ADMIN -------------
+# ----------------------------------------FEEDBACK DISPLAY----------------
+
+
+@app.route("/feedbackdisplay/", methods=["GET", "POST"])
 def feedbackdisplay():
-	cursor = conn.cursor()
-	cursor.execute("""SELECT * FROM Feedback""")
-	data1 = cursor.fetchall()
-	cursor.close()
-	
-	return render_template("feedbackdisplay.html",data = data1)
-	
-#------------------------------------FEEDBACK DISPLAY END -------------------------------------------------------------------------------
-#-----------------------------------Display Customer Details----------------------------
-@app.route("/displaycustomer/",methods=['GET','POST'])
+    cursor = conn.cursor()
+    cursor.execute("""SELECT * FROM Feedback""")
+    data1 = cursor.fetchall()
+    cursor.close()
 
+    return render_template("feedbackdisplay.html", data=data1)
+
+
+# ------------------------------------FEEDBACK DISPLAY END ---------------
+# -----------------------------------Display Customer Details-------------
+
+
+@app.route("/displaycustomer/", methods=["GET", "POST"])
 def displaycustomer():
-	cursor = conn.cursor()
-	cursor.execute("""SELECT * FROM Cust_User""")
-	data1 = cursor.fetchall()
-	cursor.close()
-	
-	return render_template("displaycustomers.html",data = data1)
-#-------------------------------------DELETE CUSTOMER USER-----------------------------------------------------------------------------
-@app.route("/deleteuser/",methods=['GET','POST'])
+    cursor = conn.cursor()
+    cursor.execute("""SELECT * FROM Cust_User""")
+    data1 = cursor.fetchall()
+    cursor.close()
 
+    return render_template("displaycustomers.html", data=data1)
+
+
+# -------------------------------------DELETE CUSTOMER USER---------------
+
+
+@app.route("/deleteuser/", methods=["GET", "POST"])
 def deleteuserdriver():
-	return render_template("deleteuser.html")	
-	
-@app.route("/deleteUSER/",methods=['GET','POST'])
+    return render_template("deleteuser.html")
 
+
+@app.route("/deleteUSER/", methods=["GET", "POST"])
 def deleteuser():
-	cursor = conn.cursor()
-	dusername1 = str(request.form["dusername"])
-	husername1 = request.form["husername"]
-	
-	udflag = False
-	cursor.execute("""SELECT userId FROM Cust_User""")
-	usernamesud = cursor.fetchall()
-	usernames_listud = list(usernamesud)
-	usernames_lenud = len(usernames_listud)
-	for a in range(0,usernames_lenud):
-		if usernames_listud[a][0] == dusername1:
-			udflag = True
-	if udflag == False:
-		flash("Entered Username does not Exist !!!")
-		return render_template("deleteuser.html")
-		
-	cursor.execute("""DELETE FROM Cust_User WHERE userId = %s""",[dusername1])
-	conn.commit()
-	#print(mpassword,dusername,husername)
-	cursor.close()
-	flash("Customer Successfully Deleted !!!")
-	return render_template("deleteuser.html")
-	
-#------------------------------DELETE CUSTOMER ENDS --------------------------------------------------------------------------------
+    cursor = conn.cursor()
+    dusername1 = str(request.form["dusername"])
+    request.form["husername"]
 
-#----------------------------------ADD NEW CAR -----------------------------------------------------------------------------------------------
+    udflag = False
+    cursor.execute("""SELECT userId FROM Cust_User""")
+    usernamesud = cursor.fetchall()
+    usernames_listud = list(usernamesud)
+    usernames_lenud = len(usernames_listud)
+    for a in range(0, usernames_lenud):
+        if usernames_listud[a][0] == dusername1:
+            udflag = True
+    if not udflag:
+        flash("Entered Username does not Exist !!!")
+        return render_template("deleteuser.html")
 
-@app.route("/addcar/",methods=['GET','POST'])
+    cursor.execute("""DELETE FROM Cust_User WHERE userId = %s""", [dusername1])
+    conn.commit()
+    # print(mpassword,dusername,husername)
+    cursor.close()
+    flash("Customer Successfully Deleted !!!")
+    return render_template("deleteuser.html")
 
+
+# ------------------------------DELETE CUSTOMER ENDS ---------------------
+
+# ----------------------------------ADD NEW CAR --------------------------
+
+
+@app.route("/addcar/", methods=["GET", "POST"])
 def addcardriver():
-	return render_template("addcar.html")
+    return render_template("addcar.html")
 
-@app.route("/addCAR/",methods=['GET','POST'])
 
+@app.route("/addCAR/", methods=["GET", "POST"])
 def addcarform():
-	car_type = ['Sedan','Hatchback','SUV']
-	Car_Type = ""
-	cursor = conn.cursor()
-	carid = str(request.form["carid"])
-	model = request.form["model"]
-	registration = request.form["registration"]
-	seating = request.form["seating"]
-	Type = int(request.form["type"])
-	Car_Type = car_type[Type]
-	price = int(request.form["price"])
-	
-	cursor.execute("""INSERT INTO Car(Car_id,model_name,registeration_no,seating_capacity,Car_type,price_per_km) VALUES (%s,%s,%s,%s,%s,%s)""",(carid,model,registration,seating,Car_Type,price)) 
-	conn.commit()
-	cursor.close()
-	#print(mpassword,dusername,husername)
-	flash("New Car Successfully Added !!!")
-	return render_template("addcar.html")
-	
-#-----------------------------------ADD CAR ENDS---------------------------------------------------------------------------------
+    car_type = ["Sedan", "Hatchback", "SUV"]
+    Car_Type = ""
+    cursor = conn.cursor()
+    carid = str(request.form["carid"])
+    model = request.form["model"]
+    registration = request.form["registration"]
+    seating = request.form["seating"]
+    Type = int(request.form["type"])
+    Car_Type = car_type[Type]
+    price = int(request.form["price"])
 
-#------------------------------------------------DISPLAY CARS-----------------------------------------------------------------------------
+    cursor.execute(
+        """INSERT INTO Car(Car_id,model_name,registeration_no,seating_capacity,Car_type,price_per_km) VALUES (%s,%s,%s,%s,%s,%s)""",
+        (carid,
+         model,
+         registration,
+         seating,
+         Car_Type,
+         price),
+    )
+    conn.commit()
+    cursor.close()
+    # print(mpassword,dusername,husername)
+    flash("New Car Successfully Added !!!")
+    return render_template("addcar.html")
 
-@app.route("/displaycars/",methods=['GET','POST'])
 
+# -----------------------------------ADD CAR ENDS-------------------------
+
+# ------------------------------------------------DISPLAY CARS------------
+
+
+@app.route("/displaycars/", methods=["GET", "POST"])
 def displaycars():
-	cursor = conn.cursor()
-	cursor.execute("""SELECT * FROM Car""")
-	data2 = cursor.fetchall()
-	cursor.close()
-	
-	return render_template("displaycars.html",data = data2)
-#--------------------------------------------DISPLAY CAR ENDS-------------------------------------------------------------------------------
+    cursor = conn.cursor()
+    cursor.execute("""SELECT * FROM Car""")
+    data2 = cursor.fetchall()
+    cursor.close()
 
-#---------------------------------------------DELETE CAR----------------------------------------------------------------------------------
+    return render_template("displaycars.html", data=data2)
 
-@app.route("/deletecars/",methods=['GET','POST'])
 
+# --------------------------------------------DISPLAY CAR ENDS------------
+
+# ---------------------------------------------DELETE CAR-----------------
+
+
+@app.route("/deletecars/", methods=["GET", "POST"])
 def deletecardriver():
-	return render_template("deletecars.html")	
-	
-@app.route("/deleteCARS/",methods=['GET','POST'])
+    return render_template("deletecars.html")
 
+
+@app.route("/deleteCARS/", methods=["GET", "POST"])
 def deletecar():
-	cursor = conn.cursor()
-	carid = str(request.form["carid"])
-	
-	cflag = False
-	cursor.execute("""SELECT Car_id FROM Car""")
-	carids = cursor.fetchall()
-	carid_list = list(carids)
-	carid_list_len = len(carid_list)
-	for a in range(0,carid_list_len):
-		if carid_list[a][0] == carid:
-			cflag = True
-	if cflag == False:
-		flash("Entered CarId does not Exist !!!")
-		return render_template("deletecars.html")
-		
-	cursor.execute("""DELETE FROM Car WHERE Car_id = %s""",[carid])
-	conn.commit()
-	#print(mpassword,dusername,husername)
-	cursor.close()
-	flash("Car Successfully Deleted !!!")
-	return render_template("deletecars.html")
-	
+    cursor = conn.cursor()
+    carid = str(request.form["carid"])
 
-#-----------------------------------------------------------------------
+    cflag = False
+    cursor.execute("""SELECT Car_id FROM Car""")
+    carids = cursor.fetchall()
+    carid_list = list(carids)
+    carid_list_len = len(carid_list)
+    for a in range(0, carid_list_len):
+        if carid_list[a][0] == carid:
+            cflag = True
+    if not cflag:
+        flash("Entered CarId does not Exist !!!")
+        return render_template("deletecars.html")
 
-#---------------------------------------------ADD Driver-----------------------------------------------------------------------------------------
+    cursor.execute("""DELETE FROM Car WHERE Car_id = %s""", [carid])
+    conn.commit()
+    # print(mpassword,dusername,husername)
+    cursor.close()
+    flash("Car Successfully Deleted !!!")
+    return render_template("deletecars.html")
 
-@app.route("/adddriver/",methods=['GET','POST'])
 
+# -----------------------------------------------------------------------
+
+# ---------------------------------------------ADD Driver-----------------
+
+
+@app.route("/adddriver/", methods=["GET", "POST"])
 def adddriver():
-	return render_template("adddriver.html")
+    return render_template("adddriver.html")
 
-@app.route("/addDRIVER/",methods=['GET','POST'])
 
+@app.route("/addDRIVER/", methods=["GET", "POST"])
 def adddriverform():
-	
-	cursor = conn.cursor()
-	dfname = request.form["dfname"]
-	dlname = request.form["dlname"]
-	dphone = request.form["dphone"]
-	license = request.form["license"]
-	dage = request.form["dage"]
-	cursor.execute("""INSERT INTO Driver(fName,lName,phone_no,licence_no,age) VALUES (%s,%s,%s,%s,%s)""",(dfname,dlname,dphone,license,dage)) 
-	conn.commit()
-	cursor.close()
-	#print(mpassword,dusername,husername)
-	flash("New Driver Successfully Added !!!")
-	return render_template("adddriver.html")
-	
-#-------------------------------------ADD DRIVER END------------------------------------------------
+    cursor = conn.cursor()
+    dfname = request.form["dfname"]
+    dlname = request.form["dlname"]
+    dphone = request.form["dphone"]
+    license = request.form["license"]
+    dage = request.form["dage"]
+    cursor.execute(
+        """INSERT INTO Driver(fName,lName,phone_no,licence_no,age) VALUES (%s,%s,%s,%s,%s)""",
+        (dfname, dlname, dphone, license, dage),
+    )
+    conn.commit()
+    cursor.close()
+    # print(mpassword,dusername,husername)
+    flash("New Driver Successfully Added !!!")
+    return render_template("adddriver.html")
 
-#-------------------------------Display Driver -------------------------------------------------
-@app.route("/displaydrivers/",methods=['GET','POST'])
 
+# -------------------------------------ADD DRIVER END---------------------
+
+# -------------------------------Display Driver --------------------------
+
+
+@app.route("/displaydrivers/", methods=["GET", "POST"])
 def displaydriver():
-	cursor = conn.cursor()
-	cursor.execute("""SELECT * FROM Driver""")
-	data1 = cursor.fetchall()
-	cursor.close()
-	
-	return render_template("displaydrivers.html",data = data1)
-	
-#----------------------------DISPLAY DRIVER ENDS------------------------------------------------------------
+    cursor = conn.cursor()
+    cursor.execute("""SELECT * FROM Driver""")
+    data1 = cursor.fetchall()
+    cursor.close()
 
-#---------------------------DELETE DRIVER-----------------------------------------------------------------
-@app.route("/deletedriver/",methods=['GET','POST'])
+    return render_template("displaydrivers.html", data=data1)
 
+
+# ----------------------------DISPLAY DRIVER ENDS-------------------------
+
+# ---------------------------DELETE DRIVER--------------------------------
+
+
+@app.route("/deletedriver/", methods=["GET", "POST"])
 def delete_driver():
-	return render_template("deletedriver.html")	
-	
-@app.route("/deleteDriver/",methods=['GET','POST'])
+    return render_template("deletedriver.html")
 
+
+@app.route("/deleteDriver/", methods=["GET", "POST"])
 def deletedriver():
-	cursor = conn.cursor()
-	driverid = str(request.form["driverid"])
-	
-	'''dflag = False
+    cursor = conn.cursor()
+    driverid = str(request.form["driverid"])
+
+    '''dflag = False
 	cursor.execute("""SELECT driverId FROM Driver""")
 	driverids = cursor.fetchall()
 	driverid_list = list(driverids)
@@ -840,471 +974,656 @@ def deletedriver():
 		flash("Entered DriverId does not Exist !!!")
 		return render_template("deletedriver.html")
 	'''
-	cursor.execute("""DELETE FROM Booking WHERE driverId = %s""",[driverid])	
-	cursor.execute("""DELETE FROM Driver WHERE driverId = %s""",[driverid])
-	conn.commit()
-	#print(mpassword,dusername,husername)
-	cursor.close()
-	flash("Driver Successfully Deleted !!!")
-	return render_template("deletedriver.html")
+    cursor.execute("""DELETE FROM Booking WHERE driverId = %s""", [driverid])
+    cursor.execute("""DELETE FROM Driver WHERE driverId = %s""", [driverid])
+    conn.commit()
+    # print(mpassword,dusername,husername)
+    cursor.close()
+    flash("Driver Successfully Deleted !!!")
+    return render_template("deletedriver.html")
 
-#----------------------------ABOUT PAGE-------------------------------------------
 
-@app.route('/aboutpage/',methods=['GET','POST'])
+# ----------------------------ABOUT PAGE----------------------------------
 
+
+@app.route("/aboutpage/", methods=["GET", "POST"])
 def aboutpage():
-	print("Entered") 	#Testing
-	
-	return render_template("about.html")	
-	
-@app.route('/contactpage/',methods=['GET','POST'])
+    print("Entered")  # Testing
 
-#--------------------------END ABOUT PAGE -------------------------------------------------------------------------
+    return render_template("about.html")
 
-@app.route("/payment",methods=["GET","POST"])
 
+@app.route("/contactpage/", methods=["GET", "POST"])
+# --------------------------END ABOUT PAGE -------------------------------
+@app.route("/payment", methods=["GET", "POST"])
 def paymentdriver():
-	print("ENTERED")
-	
-	return render_template("payment.html")
-	
-@app.route("/creditPAYMENT",methods=["GET","POST"])
+    print("ENTERED")
 
+    return render_template("payment.html")
+
+
+@app.route("/creditPAYMENT", methods=["GET", "POST"])
 def credit_payment():
-	
-	km = {'Nashik-Pune': 211,'Nashik-Mumbai':165,'Nashik-Nagpur':680,'Nashik-Dhule':144,'Nashik-Aurangabad':160}
-	cursor = conn.cursor()
-	print("CUST ID ",custid)
-	#paid = int(request.form["radio"])
-	
-	#payment = payment_status[paid]
-	payment = "Paid"
-	payment_type = "Credit Card"
-	
-	print("CUSTID : ",custid)
-	cursor.execute("""SELECT bookingId FROM Booking WHERE userId = %s and carid =%s and driverid =%s""",[custid,CARID,driverID])
-	book = cursor.fetchall()
-	bookingid = book[0][0]
-	
-	cursor.execute("""SELECT cab_route FROM Booking WHERE bookingId = %s""",[bookingid])
-	route = cursor.fetchall()
-	cab_route = route[0][0]
-	KM = km[cab_route]
-	
-	cursor.execute("""SELECT carid FROM Booking WHERE bookingId = %s""",[bookingid])
-	carID = cursor.fetchall()
-	carid = carID[0][0]
-	
-	cursor.execute("""SELECT price_per_km FROM Car WHERE Car_id = %s""",[carid])
-	cabprice = cursor.fetchall()
-	price = int(cabprice[0][0])
-	
-	print(price,KM)
-	final_amount = KM * price
-	
-	cursor.execute("""INSERT INTO Payment(payment_type,status,bookingId,total_amount) values(%s,%s,%s,%s)""",(payment_type,payment,bookingid,final_amount))
-	
-	conn.commit()
-	
-	print("PAID CREDIT ")
-	print("STATUS : ",payment)
-	print("payment_type : ",payment_type)
-	return redirect('/generateinvoice')
-	
-@app.route("/netbankingPAYMENT",methods=["GET","POST"])
+    km = {
+        "Nashik-Pune": 211,
+        "Nashik-Mumbai": 165,
+        "Nashik-Nagpur": 680,
+        "Nashik-Dhule": 144,
+        "Nashik-Aurangabad": 160,
+    }
+    cursor = conn.cursor()
+    print("CUST ID ", custid)
+    # paid = int(request.form["radio"])
 
+    # payment = payment_status[paid]
+    payment = "Paid"
+    payment_type = "Credit Card"
+
+    print("CUSTID : ", custid)
+    cursor.execute(
+        """SELECT bookingId FROM Booking WHERE userId = %s and carid =%s and driverid =%s""",
+        [custid, CARID, driverID],
+    )
+    book = cursor.fetchall()
+    bookingid = book[0][0]
+
+    cursor.execute(
+        """SELECT cab_route FROM Booking WHERE bookingId = %s""", [bookingid]
+    )
+    route = cursor.fetchall()
+    cab_route = route[0][0]
+    KM = km[cab_route]
+
+    cursor.execute(
+        """SELECT carid FROM Booking WHERE bookingId = %s""",
+        [bookingid])
+    carID = cursor.fetchall()
+    carid = carID[0][0]
+
+    cursor.execute(
+        """SELECT price_per_km FROM Car WHERE Car_id = %s""",
+        [carid])
+    cabprice = cursor.fetchall()
+    price = int(cabprice[0][0])
+
+    print(price, KM)
+    final_amount = KM * price
+
+    cursor.execute(
+        """INSERT INTO Payment(payment_type,status,bookingId,total_amount) values(%s,%s,%s,%s)""",
+        (payment_type, payment, bookingid, final_amount),
+    )
+
+    conn.commit()
+
+    print("PAID CREDIT ")
+    print("STATUS : ", payment)
+    print("payment_type : ", payment_type)
+    return redirect("/generateinvoice")
+
+
+@app.route("/netbankingPAYMENT", methods=["GET", "POST"])
 def netbanking_payment():
-	km = {'Nashik-Pune': 211,'Nashik-Mumbai':165,'Nashik-Nagpur':680,'Nashik-Dhule':144,'Nashik-Aurangabad':160}
-	#paid = int(request.form["radio"])
-	
-	#payment = payment_status[paid]
-	payment = "Paid"
-	payment_type = "Net Banking"
-	
-	print("CUSTID : ",custid)
-	cursor.execute("""SELECT bookingId FROM Booking WHERE userId = %s and carid =%s and driverid =%s""",[custid,CARID,driverID])
-	book = cursor.fetchall()
-	bookingid = book[0][0]
-	
-	cursor.execute("""SELECT cab_route FROM Booking WHERE bookingId = %s""",[bookingid])
-	route = cursor.fetchall()
-	cab_route = route[0][0]
-	KM = km[cab_route]
-	
-	cursor.execute("""SELECT carid FROM Booking WHERE bookingId = %s""",[bookingid])
-	carID = cursor.fetchall()
-	carid = carID[0][0]
-	
-	cursor.execute("""SELECT price_per_km FROM Car WHERE Car_id = %s""",[carid])
-	cabprice = cursor.fetchall()
-	price = int(cabprice[0][0])
-	
-	print(price,KM)
-	final_amount = KM * price
-	
-	cursor.execute("""INSERT INTO Payment(payment_type,status,bookingId,total_amount) values(%s,%s,%s,%s)""",(payment_type,payment,bookingid,final_amount))
-	
-	conn.commit()
-	print("PAID NET ")
-	print("STATUS : ",payment)
-	print("payment_type : ",payment_type)
-	return redirect('/generateinvoice')
-	
-@app.route("/debitPAYMENT",methods=["GET","POST"])
+    km = {
+        "Nashik-Pune": 211,
+        "Nashik-Mumbai": 165,
+        "Nashik-Nagpur": 680,
+        "Nashik-Dhule": 144,
+        "Nashik-Aurangabad": 160,
+    }
+    # paid = int(request.form["radio"])
 
+    # payment = payment_status[paid]
+    payment = "Paid"
+    payment_type = "Net Banking"
+
+    print("CUSTID : ", custid)
+    cursor.execute(
+        """SELECT bookingId FROM Booking WHERE userId = %s and carid =%s and driverid =%s""",
+        [custid, CARID, driverID],
+    )
+    book = cursor.fetchall()
+    bookingid = book[0][0]
+
+    cursor.execute(
+        """SELECT cab_route FROM Booking WHERE bookingId = %s""", [bookingid]
+    )
+    route = cursor.fetchall()
+    cab_route = route[0][0]
+    KM = km[cab_route]
+
+    cursor.execute(
+        """SELECT carid FROM Booking WHERE bookingId = %s""",
+        [bookingid])
+    carID = cursor.fetchall()
+    carid = carID[0][0]
+
+    cursor.execute(
+        """SELECT price_per_km FROM Car WHERE Car_id = %s""",
+        [carid])
+    cabprice = cursor.fetchall()
+    price = int(cabprice[0][0])
+
+    print(price, KM)
+    final_amount = KM * price
+
+    cursor.execute(
+        """INSERT INTO Payment(payment_type,status,bookingId,total_amount) values(%s,%s,%s,%s)""",
+        (payment_type, payment, bookingid, final_amount),
+    )
+
+    conn.commit()
+    print("PAID NET ")
+    print("STATUS : ", payment)
+    print("payment_type : ", payment_type)
+    return redirect("/generateinvoice")
+
+
+@app.route("/debitPAYMENT", methods=["GET", "POST"])
 def debit_payment():
-	km = {'Nashik-Pune': 211,'Nashik-Mumbai':165,'Nashik-Nagpur':680,'Nashik-Dhule':144,'Nashik-Aurangabad':160}
-	#paid = int(request.form["radio"])
-	
-	#payment = payment_status[paid]
-	payment = "Paid"	
-	payment_type = "Debit Card"
-	
-	print("CUSTID : ",custid)
-	cursor.execute("""SELECT bookingId FROM Booking WHERE userId = %s and carid =%s and driverid =%s""",[custid,CARID,driverID])
-	book = cursor.fetchall()
-	bookingid = book[0][0]
-	
-	cursor.execute("""SELECT cab_route FROM Booking WHERE bookingId = %s""",[bookingid])
-	route = cursor.fetchall()
-	cab_route = route[0][0]
-	KM = km[cab_route]
-	
-	cursor.execute("""SELECT carid FROM Booking WHERE bookingId = %s""",[bookingid])
-	carID = cursor.fetchall()
-	carid = carID[0][0]
-	
-	cursor.execute("""SELECT price_per_km FROM Car WHERE Car_id = %s""",[carid])
-	cabprice = cursor.fetchall()
-	price = int(cabprice[0][0])
-	
-	print(price,KM)
-	final_amount = KM * price
-	
-	cursor.execute("""INSERT INTO Payment(payment_type,status,bookingId,total_amount) values(%s,%s,%s,%s)""",(payment_type,payment,bookingid,final_amount))
-	
-	
-	conn.commit()
-	print("PAID DEBIT ")
-	print("STATUS : ",payment)
-	print("payment_type : ",payment_type)
+    km = {
+        "Nashik-Pune": 211,
+        "Nashik-Mumbai": 165,
+        "Nashik-Nagpur": 680,
+        "Nashik-Dhule": 144,
+        "Nashik-Aurangabad": 160,
+    }
+    # paid = int(request.form["radio"])
 
-	return redirect('/generateinvoice')
-#------------------------PAYMENT END--------------------------------------------
-#-----------------------INVOICE ------------------------------------------------------------------
+    # payment = payment_status[paid]
+    payment = "Paid"
+    payment_type = "Debit Card"
 
-@app.route("/generateinvoice/",methods=['GET','POST'])
+    print("CUSTID : ", custid)
+    cursor.execute(
+        """SELECT bookingId FROM Booking WHERE userId = %s and carid =%s and driverid =%s""",
+        [custid, CARID, driverID],
+    )
+    book = cursor.fetchall()
+    bookingid = book[0][0]
 
+    cursor.execute(
+        """SELECT cab_route FROM Booking WHERE bookingId = %s""", [bookingid]
+    )
+    route = cursor.fetchall()
+    cab_route = route[0][0]
+    KM = km[cab_route]
+
+    cursor.execute(
+        """SELECT carid FROM Booking WHERE bookingId = %s""",
+        [bookingid])
+    carID = cursor.fetchall()
+    carid = carID[0][0]
+
+    cursor.execute(
+        """SELECT price_per_km FROM Car WHERE Car_id = %s""",
+        [carid])
+    cabprice = cursor.fetchall()
+    price = int(cabprice[0][0])
+
+    print(price, KM)
+    final_amount = KM * price
+
+    cursor.execute(
+        """INSERT INTO Payment(payment_type,status,bookingId,total_amount) values(%s,%s,%s,%s)""",
+        (payment_type, payment, bookingid, final_amount),
+    )
+
+    conn.commit()
+    print("PAID DEBIT ")
+    print("STATUS : ", payment)
+    print("payment_type : ", payment_type)
+
+    return redirect("/generateinvoice")
+
+
+# ------------------------PAYMENT END-------------------------------------
+# -----------------------INVOICE -----------------------------------------
+
+
+@app.route("/generateinvoice/", methods=["GET", "POST"])
 def invoice():
-	cursor = conn.cursor()
-	
-	print("CUSTID : ",custid)
-	#user_id=request.form['user']
-	cursor.execute("""SELECT carId FROM Booking WHERE bookingId = %s""",[b_actual_id])
-	carr = cursor.fetchall()
-	carrid = carr[0][0]
-	#print(bookingid)
-	
-	cursor.execute("""SELECT model_name FROM Car WHERE car_id = %s""",[carrid])
-	modell = cursor.fetchall()
-	model = modell[0][0]
-	#print(bookingId)
-	#cursor.execute("""select Payment_id from Payment where status=%s and payment_type=%s""",(payment,payment_type))
-	#pay=cursor.fetchall()
-	#payment_id=pay[0][0]
-	cursor.execute("""SELECT fName,lName FROM Cust_User where userId=%s""",[custid])
-	#data5 = cursor.fetchall()
-	data5 = cursor.fetchall()
-	cursor.execute("""SELECT emailId FROM Cust_User WHERE userId = %s""",[custid])
-	emaill = cursor.fetchall()
-	semail = emaill[0][0]
-	print(data5)
-	data10=data5[0][0] +" "+data5[0][1]
-	cursor.execute("""SELECT phone FROM Cust_User where userId=%s""",[custid])
-	p_no=cursor.fetchall()
-	p_no1=p_no[0][0]
-	print(p_no)
-	cursor.execute("""SELECT Cab,startdate,endDate,Pickup_time,Pickup_location,Drop_off_location FROM Booking where bookingId=%s""",[b_actual_id])
-	union=cursor.fetchall()
-	Cab=union[0][0]
-	Sd=union[0][1]
-	Ed=union[0][2]
-	P_time=union[0][3]
-	P_loc=union[0][4]
-	D_loc=union[0][5]
-	cursor.execute("""SELECT driverId FROM Booking where  bookingId=%s""",[b_actual_id])
-	d_id=cursor.fetchall()
-	driverid=d_id[0][0]
-	cursor.execute("""SELECT fName,lName FROM Driver where driverId=%s""",[driverid])
-	d_name=cursor.fetchall()
-	d_full_name=d_name[0][0]+" "+d_name[0][1]
-	cursor.execute("""SELECT phone_no FROM Driver where driverId=%s""",[driverid])
-	dphone = cursor.fetchall()
-	dphoneno = dphone[0][0]
-	cursor.execute("""SELECT payment_type  FROM Payment where bookingId=%s""",[b_actual_id])
-	pType=cursor.fetchall()
-	print("PTYPE",pType)
-	P_type=pType[0][0]
-	
-	cursor.execute("""SELECT total_amount FROM Payment where bookingId=%s""",[b_actual_id])
-	amt1=cursor.fetchall()
-	amt=amt1[0][0]
-	bID = str(b_actual_id)
-	msg=Message("Your Cab is Successfully Booked !!!",sender="Car Rentel Services",recipients=[semail])
-	msg.body = "Thank you for Booking Cab from Us.Your Booking ID is "+bID
-	mail.send(msg)
-			
-	return render_template("invoice.html",data =b_actual_id,name=data10,cab=Cab,cab_model=model,sd=Sd,ed=Ed,p_time=P_time,p_loc=P_loc,d_loc=D_loc,dName=d_full_name,dphone1=dphoneno,p_type=P_type,amount = amt)
-	
-	
-#---------------------DISPLAY CAR STATUS ---------------------------------------
+    cursor = conn.cursor()
 
-@app.route("/displaycarstatus/",methods=['GET','POST'])
+    print("CUSTID : ", custid)
+    # user_id=request.form['user']
+    cursor.execute(
+        """SELECT carId FROM Booking WHERE bookingId = %s""",
+        [b_actual_id])
+    carr = cursor.fetchall()
+    carrid = carr[0][0]
+    # print(bookingid)
 
+    cursor.execute(
+        """SELECT model_name FROM Car WHERE car_id = %s""",
+        [carrid])
+    modell = cursor.fetchall()
+    model = modell[0][0]
+    # print(bookingId)
+    # cursor.execute("""select Payment_id from Payment where status=%s and payment_type=%s""",(payment,payment_type))
+    # pay=cursor.fetchall()
+    # payment_id=pay[0][0]
+    cursor.execute(
+        """SELECT fName,lName FROM Cust_User where userId=%s""",
+        [custid])
+    # data5 = cursor.fetchall()
+    data5 = cursor.fetchall()
+    cursor.execute(
+        """SELECT emailId FROM Cust_User WHERE userId = %s""",
+        [custid])
+    emaill = cursor.fetchall()
+    semail = emaill[0][0]
+    print(data5)
+    data10 = data5[0][0] + " " + data5[0][1]
+    cursor.execute("""SELECT phone FROM Cust_User where userId=%s""", [custid])
+    p_no = cursor.fetchall()
+    p_no[0][0]
+    print(p_no)
+    cursor.execute(
+        """SELECT Cab,startdate,endDate,Pickup_time,Pickup_location,Drop_off_location FROM Booking where bookingId=%s""",
+        [b_actual_id],
+    )
+    union = cursor.fetchall()
+    Cab = union[0][0]
+    Sd = union[0][1]
+    Ed = union[0][2]
+    P_time = union[0][3]
+    P_loc = union[0][4]
+    D_loc = union[0][5]
+    cursor.execute(
+        """SELECT driverId FROM Booking where  bookingId=%s""", [b_actual_id]
+    )
+    d_id = cursor.fetchall()
+    driverid = d_id[0][0]
+    cursor.execute(
+        """SELECT fName,lName FROM Driver where driverId=%s""",
+        [driverid])
+    d_name = cursor.fetchall()
+    d_full_name = d_name[0][0] + " " + d_name[0][1]
+    cursor.execute(
+        """SELECT phone_no FROM Driver where driverId=%s""",
+        [driverid])
+    dphone = cursor.fetchall()
+    dphoneno = dphone[0][0]
+    cursor.execute(
+        """SELECT payment_type  FROM Payment where bookingId=%s""",
+        [b_actual_id])
+    pType = cursor.fetchall()
+    print("PTYPE", pType)
+    P_type = pType[0][0]
+
+    cursor.execute(
+        """SELECT total_amount FROM Payment where bookingId=%s""",
+        [b_actual_id])
+    amt1 = cursor.fetchall()
+    amt = amt1[0][0]
+    bID = str(b_actual_id)
+    msg = Message(
+        "Your Cab is Successfully Booked !!!",
+        sender="Car Rentel Services",
+        recipients=[semail],
+    )
+    msg.body = "Thank you for Booking Cab from Us.Your Booking ID is " + bID
+    mail.send(msg)
+
+    return render_template(
+        "invoice.html",
+        data=b_actual_id,
+        name=data10,
+        cab=Cab,
+        cab_model=model,
+        sd=Sd,
+        ed=Ed,
+        p_time=P_time,
+        p_loc=P_loc,
+        d_loc=D_loc,
+        dName=d_full_name,
+        dphone1=dphoneno,
+        p_type=P_type,
+        amount=amt,
+    )
+
+
+# ---------------------DISPLAY CAR STATUS --------------------------------
+
+
+@app.route("/displaycarstatus/", methods=["GET", "POST"])
 def carstatusdriver():
-	cursor = conn.cursor()
-	cursor.execute("""SELECT Car_id,model_name,registeration_no,Car_type,status FROM Car""")
-	data1 = cursor.fetchall()
-	cursor.close()
-	
-	return render_template("displaystatuscar.html",data = data1)
+    cursor = conn.cursor()
+    cursor.execute(
+        """SELECT Car_id,model_name,registeration_no,Car_type,status FROM Car"""
+    )
+    data1 = cursor.fetchall()
+    cursor.close()
 
-#---------------------DISPLAY CAR STATUS ENDS---------------------------------------.
+    return render_template("displaystatuscar.html", data=data1)
 
-#---------------------Change CAR STATUS ---------------------------------------
-@app.route("/changecarstatus/",methods=['GET','POST'])
 
+# ---------------------DISPLAY CAR STATUS ENDS---------------------------------------.
+
+# ---------------------Change CAR STATUS ---------------------------------
+
+
+@app.route("/changecarstatus/", methods=["GET", "POST"])
 def changecarstatusdriver():
-	return render_template("changecarstatus.html")
+    return render_template("changecarstatus.html")
 
-@app.route("/changecarSTATUS/",methods=['GET','POST'])
 
+@app.route("/changecarSTATUS/", methods=["GET", "POST"])
 def changecarstatus():
-	ccflag = False
-	status_type = ['Available','Booked']
-	Car_Type = ""
-	cursor = conn.cursor()
-	carid1 = request.form["cari"]
-	
-	cursor.execute("""SELECT Car_id FROM Car WHERE Car_id = %s""",[carid1])
-	cid = cursor.fetchall()
-	cid_list = list(cid)
-	cid_len = len(cid_list)
-	for a in range(0,cid_len):
-		if cid_list[a][0] == carid1:
-			ccflag = True
-	if ccflag == False:
-		flash("Entered CarID is Invalid !!!")
-		return render_template("changecarstatus.html")
-			
-	Type = int(request.form["status"])
-	status_Type = status_type[Type]
-	
-	cursor.execute("""UPDATE Car SET status = %s WHERE Car_id = %s""",(status_Type,carid1))
-	conn.commit()
-	cursor.close()
-	#print(mpassword,dusername,husername)
-	flash("Car Status Successfully Changed !!!")
-	return render_template("changecarstatus.html")
+    ccflag = False
+    status_type = ["Available", "Booked"]
+    cursor = conn.cursor()
+    carid1 = request.form["cari"]
 
-#---------------------DISPLAY DRIVER STATUS ---------------------------------------
+    cursor.execute("""SELECT Car_id FROM Car WHERE Car_id = %s""", [carid1])
+    cid = cursor.fetchall()
+    cid_list = list(cid)
+    cid_len = len(cid_list)
+    for a in range(0, cid_len):
+        if cid_list[a][0] == carid1:
+            ccflag = True
+    if not ccflag:
+        flash("Entered CarID is Invalid !!!")
+        return render_template("changecarstatus.html")
 
-@app.route("/displaydriverstatus/",methods=['GET','POST'])
+    Type = int(request.form["status"])
+    status_Type = status_type[Type]
 
+    cursor.execute(
+        """UPDATE Car SET status = %s WHERE Car_id = %s""",
+        (status_Type,
+         carid1))
+    conn.commit()
+    cursor.close()
+    # print(mpassword,dusername,husername)
+    flash("Car Status Successfully Changed !!!")
+    return render_template("changecarstatus.html")
+
+
+# ---------------------DISPLAY DRIVER STATUS -----------------------------
+
+
+@app.route("/displaydriverstatus/", methods=["GET", "POST"])
 def driverstatusdriver():
-	cursor = conn.cursor()
-	cursor.execute("""SELECT driverId,fName,lName,licence_no,status FROM Driver""")
-	data1 = cursor.fetchall()
-	cursor.close()
-	
-	return render_template("displaystatusdriver.html",data = data1)
+    cursor = conn.cursor()
+    cursor.execute(
+        """SELECT driverId,fName,lName,licence_no,status FROM Driver""")
+    data1 = cursor.fetchall()
+    cursor.close()
 
-#---------------------DISPLAY DRIVER STATUS ENDS---------------------------------------.
+    return render_template("displaystatusdriver.html", data=data1)
 
-#---------------------Change DRIVER STATUS ---------------------------------------
-@app.route("/changedriverstatus/",methods=['GET','POST'])
 
+# ---------------------DISPLAY DRIVER STATUS ENDS---------------------------------------.
+
+# ---------------------Change DRIVER STATUS ------------------------------
+
+
+@app.route("/changedriverstatus/", methods=["GET", "POST"])
 def changedriverstatusdriver():
-	return render_template("changedriverstatus.html")
+    return render_template("changedriverstatus.html")
 
-@app.route("/changedriverSTATUS/",methods=['GET','POST'])
 
+@app.route("/changedriverSTATUS/", methods=["GET", "POST"])
 def changedriverstatus():
-	cdflag1 = False
-	status_type = ['Available','Booked']
-	Car_Type = ""
-	cursor = conn.cursor()
-	driverid = request.form["driverid"]
-	driverid2 = int(driverid)
-	cursor.execute("""SELECT driverId FROM Driver WHERE driverId = %s""",[driverid])
-	did = cursor.fetchall()
-	did_list = list(did)
-	did_len = len(did_list)
-	print("DID LIST",did_list)
-	print("DRIVER ID :",driverid)
-	for a in range(0,did_len):
-		if did_list[a][0] == driverid2:
-			cdflag1 = True
-	if cdflag1 == False:
-		flash("Entered DriverID is Invalid !!!")
-		return render_template("changedriverstatus.html")
-		
-	Type = int(request.form["status"])
-	status_Type = status_type[Type]
-	
-	cursor.execute("""UPDATE Driver SET status = %s WHERE driverId = %s""",(status_Type,driverid))
-	conn.commit()
-	cursor.close()
-	#print(mpassword,dusername,husername)
-	flash("Driver Status Successfully Changed !!!")
-	return render_template("changedriverstatus.html")
+    cdflag1 = False
+    status_type = ["Available", "Booked"]
+    cursor = conn.cursor()
+    driverid = request.form["driverid"]
+    driverid2 = int(driverid)
+    cursor.execute(
+        """SELECT driverId FROM Driver WHERE driverId = %s""",
+        [driverid])
+    did = cursor.fetchall()
+    did_list = list(did)
+    did_len = len(did_list)
+    print("DID LIST", did_list)
+    print("DRIVER ID :", driverid)
+    for a in range(0, did_len):
+        if did_list[a][0] == driverid2:
+            cdflag1 = True
+    if not cdflag1:
+        flash("Entered DriverID is Invalid !!!")
+        return render_template("changedriverstatus.html")
+
+    Type = int(request.form["status"])
+    status_Type = status_type[Type]
+
+    cursor.execute(
+        """UPDATE Driver SET status = %s WHERE driverId = %s""",
+        (status_Type,
+         driverid))
+    conn.commit()
+    cursor.close()
+    # print(mpassword,dusername,husername)
+    flash("Driver Status Successfully Changed !!!")
+    return render_template("changedriverstatus.html")
 
 
-#-----------------------------------------------------------------------------------------------------------------
-@app.route('/pdf_download/',methods=['GET','POST'])
-
+# -----------------------------------------------------------------------------------------------------------------
+@app.route("/pdf_download/", methods=["GET", "POST"])
 def pdf_download():
-	cursor = conn.cursor()
-	
-	print("CUSTID : ",custid)
-	#user_id=request.form['user']
-	cursor.execute("""SELECT carId FROM Booking WHERE bookingId = %s""",[b_actual_id])
-	carr = cursor.fetchall()
-	carrid = carr[0][0]
-	#print(bookingid)
-	
-	cursor.execute("""SELECT model_name FROM Car WHERE car_id = %s""",[carrid])
-	modell = cursor.fetchall()
-	model = modell[0][0]
-	
-	#print(bookingId)
-	#cursor.execute("""select Payment_id from Payment where status=%s and payment_type=%s""",(payment,payment_type))
-	#pay=cursor.fetchall()
-	#payment_id=pay[0][0]
-	
-	cursor.execute("""SELECT fName,lName FROM Cust_User where userId=%s""",[custid])
-	#data5 = cursor.fetchall()
-	data5 = cursor.fetchall()
+    cursor = conn.cursor()
 
-	print(data5)
-	data10=data5[0][0] +" "+data5[0][1]
-	cursor.execute("""SELECT phone FROM Cust_User where userId=%s""",[custid])
-	p_no=cursor.fetchall()
-	p_no1=p_no[0][0]
-	print(p_no)
-	cursor.execute("""SELECT Cab,startdate,endDate,Pickup_time,Pickup_location,Drop_off_location FROM Booking where bookingId=%s""",[b_actual_id])
-	union=cursor.fetchall()
-	Cab=union[0][0]
-	Sd=union[0][1]
-	Ed=union[0][2]
-	P_time=union[0][3]
-	P_loc=union[0][4]
-	D_loc=union[0][5]
-	cursor.execute("""SELECT driverId FROM Booking where  bookingId=%s""",[b_actual_id])
-	d_id=cursor.fetchall()
-	driverid=d_id[0][0]
-	cursor.execute("""SELECT fName,lName FROM Driver where driverId=%s""",[driverid])
-	d_name=cursor.fetchall()
-	d_full_name=d_name[0][0]+" "+d_name[0][1]
-	cursor.execute("""SELECT phone_no FROM Driver where driverId=%s""",[driverid])
-	dphone = cursor.fetchall()
-	dphoneno = dphone[0][0]
-	cursor.execute("""SELECT payment_type  FROM Payment where bookingId=%s""",[b_actual_id])
-	pType=cursor.fetchall()
-	print("PTYPE",pType)
-	P_type=pType[0][0]
-	
-	cursor.execute("""SELECT total_amount FROM Payment where bookingId=%s""",[b_actual_id])
-	amt1=cursor.fetchall()
-	amt=amt1[0][0]
-	
-	html =  render_template("invoice.html",data = b_actual_id,name=data10,cab=Cab,cab_model=model,sd=Sd,ed=Ed,p_time=P_time,p_loc=P_loc,d_loc=D_loc,dName=d_full_name,dphone1=dphoneno,p_type=P_type,amount = amt)
-	return render_pdf(HTML(string=html))
+    print("CUSTID : ", custid)
+    # user_id=request.form['user']
+    cursor.execute(
+        """SELECT carId FROM Booking WHERE bookingId = %s""",
+        [b_actual_id])
+    carr = cursor.fetchall()
+    carrid = carr[0][0]
+    # print(bookingid)
 
-#------------------------------------------------STATUS PAGE--------------------------------------------------
-@app.route('/status/',methods=['GET','POST'])
+    cursor.execute(
+        """SELECT model_name FROM Car WHERE car_id = %s""",
+        [carrid])
+    modell = cursor.fetchall()
+    model = modell[0][0]
 
+    # print(bookingId)
+    # cursor.execute("""select Payment_id from Payment where status=%s and payment_type=%s""",(payment,payment_type))
+    # pay=cursor.fetchall()
+    # payment_id=pay[0][0]
+
+    cursor.execute(
+        """SELECT fName,lName FROM Cust_User where userId=%s""",
+        [custid])
+    # data5 = cursor.fetchall()
+    data5 = cursor.fetchall()
+
+    print(data5)
+    data10 = data5[0][0] + " " + data5[0][1]
+    cursor.execute("""SELECT phone FROM Cust_User where userId=%s""", [custid])
+    p_no = cursor.fetchall()
+    p_no[0][0]
+    print(p_no)
+    cursor.execute(
+        """SELECT Cab,startdate,endDate,Pickup_time,Pickup_location,Drop_off_location FROM Booking where bookingId=%s""",
+        [b_actual_id],
+    )
+    union = cursor.fetchall()
+    Cab = union[0][0]
+    Sd = union[0][1]
+    Ed = union[0][2]
+    P_time = union[0][3]
+    P_loc = union[0][4]
+    D_loc = union[0][5]
+    cursor.execute(
+        """SELECT driverId FROM Booking where  bookingId=%s""", [b_actual_id]
+    )
+    d_id = cursor.fetchall()
+    driverid = d_id[0][0]
+    cursor.execute(
+        """SELECT fName,lName FROM Driver where driverId=%s""",
+        [driverid])
+    d_name = cursor.fetchall()
+    d_full_name = d_name[0][0] + " " + d_name[0][1]
+    cursor.execute(
+        """SELECT phone_no FROM Driver where driverId=%s""",
+        [driverid])
+    dphone = cursor.fetchall()
+    dphoneno = dphone[0][0]
+    cursor.execute(
+        """SELECT payment_type  FROM Payment where bookingId=%s""",
+        [b_actual_id])
+    pType = cursor.fetchall()
+    print("PTYPE", pType)
+    P_type = pType[0][0]
+
+    cursor.execute(
+        """SELECT total_amount FROM Payment where bookingId=%s""",
+        [b_actual_id])
+    amt1 = cursor.fetchall()
+    amt = amt1[0][0]
+
+    html = render_template(
+        "invoice.html",
+        data=b_actual_id,
+        name=data10,
+        cab=Cab,
+        cab_model=model,
+        sd=Sd,
+        ed=Ed,
+        p_time=P_time,
+        p_loc=P_loc,
+        d_loc=D_loc,
+        dName=d_full_name,
+        dphone1=dphoneno,
+        p_type=P_type,
+        amount=amt,
+    )
+    return render_pdf(HTML(string=html))
+
+
+# ------------------------------------------------STATUS PAGE-------------
+
+
+@app.route("/status/", methods=["GET", "POST"])
 def statusdriver():
-	most_used_route = ""
-	cursor = conn.cursor()
-	cursor.execute("""SELECT COUNT(*) FROM Cust_User""")
-	total_c = cursor.fetchall()
-	total_cust = total_c[0][0]
-	cursor.execute("""SELECT COUNT(*) FROM Car""")
-	total_ca = cursor.fetchall()
-	total_car1 = total_ca[0][0]
-	cursor.execute("""SELECT COUNT(*) FROM Car""")
-	total_ca = cursor.fetchall()
-	total_car1 = total_ca[0][0]
-	cursor.execute("""SELECT COUNT(*) FROM Admin_User""")
-	total_a = cursor.fetchall()
-	total_admin = int(total_a[0][0])
-	cursor.execute("""SELECT COUNT(*) FROM Driver""")
-	total_d = cursor.fetchall()
-	total_driver = int(total_d[0][0])
-	total_employ = total_driver + total_admin
-	cursor.execute("""SELECT COUNT(*) FROM Car WHERE status = 'Available' """)
-	cart = cursor.fetchall()
-	tcar = cart[0][0]
-	cursor.execute("""SELECT COUNT(*) FROM Driver WHERE status = 'Available' """)
-	drivert = cursor.fetchall()
-	drivert = drivert[0][0]
-	cursor.execute("""SELECT COUNT(*) FROM Booking""")
-	tbook = cursor.fetchall()
-	tbooking = tbook[0][0]
-	cursor.execute("""SELECT COUNT(*) FROM Booking WHERE cab_route = 'Nashik-Pune' """)
-	NP = cursor.fetchall()
-	NProute = int(NP[0][0])
-	cursor.execute("""SELECT COUNT(*) FROM Booking WHERE cab_route = 'Nashik-Nagpur' """)
-	NN = cursor.fetchall()
-	NNroute = int(NN[0][0])
-	cursor.execute("""SELECT COUNT(*) FROM Booking WHERE cab_route = 'Nashik-Mumbai' """)
-	NM = cursor.fetchall()
-	NMroute = int(NM[0][0])
-	cursor.execute("""SELECT COUNT(*) FROM Booking WHERE cab_route = 'Nashik-Aurangabad' """)
-	NA = cursor.fetchall()
-	NAroute = int(NA[0][0])
-	cursor.execute("""SELECT COUNT(*) FROM Booking WHERE cab_route = 'Nashik-Dhule' """)
-	ND = cursor.fetchall()
-	NDroute = int(ND[0][0])
-	if NProute > NNroute and NProute > NMroute and NProute > NAroute and NProute > NDroute:
-		most_used_route = "Nashik-Pune"
-	elif NNroute > NProute and NNroute > NMroute and NNroute > NAroute and NNroute > NDroute:
-		most_used_route = "Nashik-Nagpur"
-	elif NMroute > NNroute and NMroute > NProute and NMroute > NAroute and NMroute > NDroute:
-		most_used_route = "Nashik-Mumbai"
-	elif NAroute > NNroute and NAroute > NMroute and NAroute > NProute and NAroute > NDroute:
-		most_used_route = "Nashik-Aurangabad"
-	elif NDroute > NNroute and NDroute > NMroute and NDroute > NAroute and NDroute > NProute:
-		most_used_route = "Nashik-Dhule"
+    most_used_route = ""
+    cursor = conn.cursor()
+    cursor.execute("""SELECT COUNT(*) FROM Cust_User""")
+    total_c = cursor.fetchall()
+    total_cust = total_c[0][0]
+    cursor.execute("""SELECT COUNT(*) FROM Car""")
+    total_ca = cursor.fetchall()
+    total_car1 = total_ca[0][0]
+    cursor.execute("""SELECT COUNT(*) FROM Car""")
+    total_ca = cursor.fetchall()
+    total_car1 = total_ca[0][0]
+    cursor.execute("""SELECT COUNT(*) FROM Admin_User""")
+    total_a = cursor.fetchall()
+    total_admin = int(total_a[0][0])
+    cursor.execute("""SELECT COUNT(*) FROM Driver""")
+    total_d = cursor.fetchall()
+    total_driver = int(total_d[0][0])
+    total_employ = total_driver + total_admin
+    cursor.execute("""SELECT COUNT(*) FROM Car WHERE status = 'Available' """)
+    cart = cursor.fetchall()
+    tcar = cart[0][0]
+    cursor.execute(
+        """SELECT COUNT(*) FROM Driver WHERE status = 'Available' """)
+    drivert = cursor.fetchall()
+    drivert = drivert[0][0]
+    cursor.execute("""SELECT COUNT(*) FROM Booking""")
+    tbook = cursor.fetchall()
+    tbooking = tbook[0][0]
+    cursor.execute(
+        """SELECT COUNT(*) FROM Booking WHERE cab_route = 'Nashik-Pune' """)
+    NP = cursor.fetchall()
+    NProute = int(NP[0][0])
+    cursor.execute(
+        """SELECT COUNT(*) FROM Booking WHERE cab_route = 'Nashik-Nagpur' """
+    )
+    NN = cursor.fetchall()
+    NNroute = int(NN[0][0])
+    cursor.execute(
+        """SELECT COUNT(*) FROM Booking WHERE cab_route = 'Nashik-Mumbai' """
+    )
+    NM = cursor.fetchall()
+    NMroute = int(NM[0][0])
+    cursor.execute(
+        """SELECT COUNT(*) FROM Booking WHERE cab_route = 'Nashik-Aurangabad' """
+    )
+    NA = cursor.fetchall()
+    NAroute = int(NA[0][0])
+    cursor.execute(
+        """SELECT COUNT(*) FROM Booking WHERE cab_route = 'Nashik-Dhule' """)
+    ND = cursor.fetchall()
+    NDroute = int(ND[0][0])
+    if (
+        NProute > NNroute
+        and NProute > NMroute
+        and NProute > NAroute
+        and NProute > NDroute
+    ):
+        most_used_route = "Nashik-Pune"
+    elif (
+        NNroute > NProute
+        and NNroute > NMroute
+        and NNroute > NAroute
+        and NNroute > NDroute
+    ):
+        most_used_route = "Nashik-Nagpur"
+    elif (
+        NMroute > NNroute
+        and NMroute > NProute
+        and NMroute > NAroute
+        and NMroute > NDroute
+    ):
+        most_used_route = "Nashik-Mumbai"
+    elif (
+        NAroute > NNroute
+        and NAroute > NMroute
+        and NAroute > NProute
+        and NAroute > NDroute
+    ):
+        most_used_route = "Nashik-Aurangabad"
+    elif (
+        NDroute > NNroute
+        and NDroute > NMroute
+        and NDroute > NAroute
+        and NDroute > NProute
+    ):
+        most_used_route = "Nashik-Dhule"
 
-	cursor.execute("SELECT COALESCE(SUM(total_amount), 0) FROM Payment")
-	row = cursor.fetchone() or (0,)
-	tsum = int(row[0])
-	print("TOTAL CUST",total_cust)
-	return render_template('Status.html',total = total_cust,tcar=total_car1,total_e=total_employ,total_car = tcar,total_driver=drivert,total_booking=tbooking,mroute=most_used_route,total_sum1=tsum)
+    cursor.execute("SELECT COALESCE(SUM(total_amount), 0) FROM Payment")
+    row = cursor.fetchone() or (0,)
+    tsum = int(row[0])
+    print("TOTAL CUST", total_cust)
+    return render_template(
+        "Status.html",
+        total=total_cust,
+        tcar=total_car1,
+        total_e=total_employ,
+        total_car=tcar,
+        total_driver=drivert,
+        total_booking=tbooking,
+        mroute=most_used_route,
+        total_sum1=tsum,
+    )
 
-@app.route('/allbooked/',methods=['GET','POST'])
+
+@app.route("/allbooked/", methods=["GET", "POST"])
 def allbooked():
-	print("Entered") 	#Testing
-	
-	return render_template("allbooked.html")
+    print("Entered")  # Testing
+
+    return render_template("allbooked.html")
 
 
-@app.route('/booked/',methods=['GET','POST'])
+@app.route("/booked/", methods=["GET", "POST"])
 def booked():
-	return redirect("/")
-	
-	
-@app.route('/lastpage/',methods=['GET','POST'])
+    return redirect("/")
 
+
+@app.route("/lastpage/", methods=["GET", "POST"])
 def lastpage():
-	print("Entered") 	#Testing
-	
-	return render_template("final.html")
-	
+    print("Entered")  # Testing
+
+    return render_template("final.html")
+
+
 if __name__ == "__main__":
     # listen on all interfaces so Docker can route in
     app.run(host="0.0.0.0", port=5000, debug=True, use_reloader=False)
-
-	
