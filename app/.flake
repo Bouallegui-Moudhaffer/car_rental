@@ -1,13 +1,3 @@
 [flake8]
-# allow slightly longer lines (or remove this if you want to ignore line‑length entirely)
 max-line-length = 120
-
-# drop the errors about tabs, blank‑line style, comments, line‑lengths, and comparisons to False
-ignore =
-    E101,  # mixed spaces and tabs
-    W191,  # indentation contains tabs
-    W293,  # blank line contains whitespace
-    E265,  # block comment should start with '# '
-    E305,  # expected 2 blank lines after class or function definition
-    E712,  # comparison to False should be 'if not cond' or 'is False'
-    E501   # line too long
+ignore = E101,W191,W293,E265,E305,E712,E501
