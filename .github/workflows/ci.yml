@@ -46,14 +46,17 @@ jobs:
 
       - name: Wait for MySQL & load schema
         run: |
-          echo "Waiting for MySQL at mysql:3306…"
-          until mysqladmin ping -h mysql --silent; do
+          echo "Waiting for MySQL at 127.0.0.1:3306 (TCP)…"
+          until mysqladmin ping -h 127.0.0.1 -P 3306 --silent; do
             echo "  still waiting…"
             sleep 5
           done
 
           echo "Loading schema…"
-          mysql -h mysql -u root -proot car_rental < db/car_rental_db.sql
+          mysql   -h 127.0.0.1 -P 3306 \
+                  -u root -proot \
+                  car_rental < db/car_rental_db.sql
+
 
 
 
