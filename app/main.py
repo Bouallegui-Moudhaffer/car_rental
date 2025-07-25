@@ -290,7 +290,7 @@ def resetpasswordform():
         if usernames_list[a][0] == Lreset_username:
             aflag = True
 
-    if aflag == False and uflag == False:
+    if aflag is False and uflag is False:
         flash("Entered Username does not Exist !!!")
         return render_template("resetpassword.html")
 
@@ -315,9 +315,10 @@ def resetpasswordform():
         if question_list[a][0] == Squestion:
             pass
 
-    """if aqflag == False and cqflag == False:
-		flash("Invalid security question Selected, Please select correct Security question !!!")
-		return render_template("resetpassword.html")
+    """
+    if aqflag == False and cqflag == False:
+    flash("Invalid security question Selected, Please select correct Security question !!!") 
+    return render_template("resetpassword.html")
 	print("Question = ",aqflag)
 	"""
     if uflag:
@@ -1553,38 +1554,38 @@ def statusdriver():
     ND = cursor.fetchall()
     NDroute = int(ND[0][0])
     if (
-        NProute > NNroute
-        and NProute > NMroute
-        and NProute > NAroute
-        and NProute > NDroute
+        NProute > NNroute and
+        NProute > NMroute and
+        NProute > NAroute and
+        NProute > NDroute
     ):
         most_used_route = "Nashik-Pune"
     elif (
-        NNroute > NProute
-        and NNroute > NMroute
-        and NNroute > NAroute
-        and NNroute > NDroute
+        NNroute > NProute and
+        NNroute > NMroute and
+        NNroute > NAroute and
+        NNroute > NDroute
     ):
         most_used_route = "Nashik-Nagpur"
     elif (
-        NMroute > NNroute
-        and NMroute > NProute
-        and NMroute > NAroute
-        and NMroute > NDroute
+        NMroute > NNroute and
+        NMroute > NProute and
+        NMroute > NAroute and
+        NMroute > NDroute
     ):
         most_used_route = "Nashik-Mumbai"
     elif (
-        NAroute > NNroute
-        and NAroute > NMroute
-        and NAroute > NProute
-        and NAroute > NDroute
+        NAroute > NNroute and
+        NAroute > NMroute and
+        NAroute > NProute and
+        NAroute > NDroute
     ):
         most_used_route = "Nashik-Aurangabad"
     elif (
-        NDroute > NNroute
-        and NDroute > NMroute
-        and NDroute > NAroute
-        and NDroute > NProute
+        NDroute > NNroute and
+        NDroute > NMroute and
+        NDroute > NAroute and
+        NDroute > NProute
     ):
         most_used_route = "Nashik-Dhule"
 
