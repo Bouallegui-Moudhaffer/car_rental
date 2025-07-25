@@ -64,7 +64,7 @@ jobs:
         # add this so `import app.main` will find your app/ directory
         env:
           PYTHONPATH: ${{ github.workspace }}
-          DB_HOST: localhost
+          DB_HOST: 127.0.0.1
           DB_USER: root
           DB_PASSWORD: root
           DB_NAME: car_rental
