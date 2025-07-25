@@ -126,6 +126,7 @@ jobs:
           # point at the new GHCR stable image
           image: 'ghcr.io/zaproxy/zaproxy:stable'
           cmd_options: >-
+            -r report_html.html \
             -r zap-report.html
 
       - name: Upload ZAP report artifact
