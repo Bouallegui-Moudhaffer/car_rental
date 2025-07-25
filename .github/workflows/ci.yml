@@ -86,20 +86,21 @@ jobs:
 
       - name: Bring up services via Docker Compose
         run: |
-          # start DB, web and MailHog using the Docker CLI plugin
           docker compose up -d db web mailhog
 
-          # wait for DB
-          until docker exec \
-            $(docker ps -q -f ancestor=mysql:5.7) \
-            mysqladmin ping -h localhost --silent; do
-            echo "Waiting for MySQL container…"
+      - name: Wait for web to be ready on 127.0.0.1:5000
+        run: |
+          echo "⏳ Waiting for Flask to start at http://127.0.0.1:5000 …"
+          for i in {1..12}; do
+            if curl -sSf http://127.0.0.1:5000/ >/dev/null; then
+              echo "✅ Flask is up!"
+              exit 0
+            fi
+            echo "…still waiting (attempt $i/12)…"
             sleep 5
           done
-
-          # wait for Flask app
-          echo "Sleeping to let Flask boot…"
-          sleep 15
+          echo "❌ Timed out waiting for Flask!"
+          exit 1
 
       - name: Run ZAP baseline scan
         uses: zaproxy/action-baseline@v0.14.0
