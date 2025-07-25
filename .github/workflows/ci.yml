@@ -46,11 +46,13 @@ jobs:
 
       - name: Wait for MySQL & load schema
         run: |
-          until mysqladmin ping -h localhost --silent; do
+          # wait on the 'mysql' service alias
+          until mysqladmin ping -h mysql --silent; do
             echo "Waiting for MySQL…"
-            sleep 5
+           sleep 5
           done
-          mysql -h localhost -u root -proot car_rental < db/car_rental_db.sql
+          # load your schema
+          mysql -h mysql -u root -proot car_rental < db/car_rental_db.sql
 
       - name: Run pytest
         env:
