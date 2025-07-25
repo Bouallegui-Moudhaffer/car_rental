@@ -317,7 +317,7 @@ def resetpasswordform():
 
     """
     if aqflag == False and cqflag == False:
-    flash("Invalid security question Selected, Please select correct Security question !!!") 
+    flash("Invalid security question Selected, Please select correct Security question !!!")
     return render_template("resetpassword.html")
 	print("Question = ",aqflag)
 	"""
