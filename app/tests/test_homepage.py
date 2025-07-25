@@ -3,6 +3,7 @@
 import pytest
 from app.main import app  # adjust import path if needed
 
+
 @pytest.fixture
 def client():
     app.config['TESTING'] = True
@@ -13,6 +14,7 @@ def client():
     app.config['DB_NAME'] = 'car_rental'
     with app.test_client() as c:
         yield c
+
 
 def test_homepage_status_code(client):
     """GET / should return 200 OK."""
