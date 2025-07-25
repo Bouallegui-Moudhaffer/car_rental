@@ -1,9 +1,6 @@
 name: CI
 
 on:
-  push:
-    branches:
-      - main
   pull_request:
 
 jobs:
@@ -23,9 +20,6 @@ jobs:
         options: >-
           --health-cmd="mysqladmin ping -h localhost"
           --health-interval=10s --health-timeout=5s --health-retries=3
-        # mount your schema into docker-entrypoint-initdb.d
-        volumes:
-          - ./db/car_rental_db.sql:/docker-entrypoint-initdb.d/init.sql:ro
 
     steps:
       - name: Checkout repo
