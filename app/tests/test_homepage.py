@@ -1,6 +1,5 @@
 # tests/test_homepage.py
 
-from flask import url_for
 import pytest
 from app.main import app  # adjust import path if needed
 
