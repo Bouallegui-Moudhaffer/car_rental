@@ -46,18 +46,15 @@ jobs:
 
       - name: Wait for MySQL & load schema
         run: |
-          # GitHub Actions exposes the service host & port in these env vars:
-          host=$MYSQL_PORT_3306_TCP_ADDR
-          port=$MYSQL_PORT_3306_TCP_PORT
-
-          echo "Waiting for MySQL at $host:$port…"
-          until mysqladmin ping -h "$host" -P "$port" --silent; do
+          echo "Waiting for MySQL at mysql:3306…"
+          until mysqladmin ping -h mysql --silent; do
             echo "  still waiting…"
             sleep 5
           done
 
           echo "Loading schema…"
-          mysql -h "$host" -P "$port" -u root -proot car_rental < db/car_rental_db.sql
+          mysql -h mysql -u root -proot car_rental < db/car_rental_db.sql
+
 
 
       - name: Run pytest
