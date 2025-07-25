@@ -1,7 +1,7 @@
 # tests/test_homepage.py
 
 import pytest
-from app.main import app  # adjust import path if needed
+from main import app
 
 
 @pytest.fixture
