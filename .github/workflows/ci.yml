@@ -86,8 +86,8 @@ jobs:
 
       - name: Bring up services via Docker Compose
         run: |
-          # start DB, web and MailHog
-          docker-compose up -d db web mailhog
+          # start DB, web and MailHog using the Docker CLI plugin
+          docker compose up -d db web mailhog
 
           # wait for DB
           until docker exec \
