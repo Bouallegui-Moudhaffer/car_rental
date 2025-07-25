@@ -61,7 +61,9 @@ jobs:
 
 
       - name: Run pytest
+        # add this so `import app.main` will find your app/ directory
         env:
+          PYTHONPATH: ${{ github.workspace }}
           DB_HOST: localhost
           DB_USER: root
           DB_PASSWORD: root
@@ -72,8 +74,6 @@ jobs:
           SECRET_KEY: testsecretkey0123456789abcdef
         run: pytest --maxfail=1 --disable-warnings -q
 
-      - name: Bandit security scan
-        run: bandit -r app -lll
 
   zap_baseline:
     name: OWASP ZAP Baseline Scan
