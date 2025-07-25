@@ -1,0 +1,110 @@
+name: CI
+
+on:
+  pull_request:
+
+jobs:
+  lint-test-bandit:
+    name: Lint, Test & Bandit
+    runs-on: ubuntu-latest
+
+    # bring up MySQL 5.7 with your init SQL
+    services:
+      mysql:
+        image: mysql:5.7
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: car_rental
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost"
+          --health-interval=10s --health-timeout=5s --health-retries=3
+        # mount your schema into docker-entrypoint-initdb.d
+        volumes:
+          - ./db/car_rental_db.sql:/docker-entrypoint-initdb.d/init.sql:ro
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential default-libmysqlclient-dev
+
+      - name: Install Python deps + dev tools
+        run: |
+          pip install --upgrade pip
+          pip install -r app/requirements.txt
+          pip install flake8 pytest bandit
+
+      - name: Lint with flake8
+        run: flake8 app
+
+      - name: Wait for MySQL & load schema
+        run: |
+          until mysqladmin ping -h localhost --silent; do
+            echo "Waiting for MySQL…"
+            sleep 5
+          done
+          mysql -h localhost -u root -proot car_rental < db/car_rental_db.sql
+
+      - name: Run pytest
+        env:
+          DB_HOST: localhost
+          DB_USER: root
+          DB_PASSWORD: root
+          DB_NAME: car_rental
+          MAIL_SERVER: mailhog
+          MAIL_PORT: 1025
+          MASTER_PASSWORD: REAPER
+          SECRET_KEY: testsecretkey0123456789abcdef
+        run: pytest --maxfail=1 --disable-warnings -q
+
+      - name: Bandit security scan
+        run: bandit -r app -lll
+
+  zap_baseline:
+    name: OWASP ZAP Baseline Scan
+    needs: lint-test-bandit
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Bring up services via Docker Compose
+        run: |
+          # start DB, web and MailHog
+          docker-compose up -d db web mailhog
+
+          # wait for DB
+          until docker exec \
+            $(docker ps -q -f ancestor=mysql:5.7) \
+            mysqladmin ping -h localhost --silent; do
+            echo "Waiting for MySQL container…"
+            sleep 5
+          done
+
+          # wait for Flask app
+          echo "Sleeping to let Flask boot…"
+          sleep 15
+
+      - name: Run ZAP baseline scan
+        uses: zaproxy/action-baseline@v0.6.0
+        with:
+          target: 'http://127.0.0.1:5000'
+          cmd_options: >-
+            -r zap-report.html
+
+      - name: Upload ZAP report artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: zap-report
+          path: zap-report.html
