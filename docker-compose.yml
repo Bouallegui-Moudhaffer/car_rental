@@ -3,9 +3,6 @@ version: '3.8'
 services:
   web:
     build: .
-    # run entrypoint.sh first (to set SECRET_KEY), then launch your app
-    entrypoint: ["/usr/local/bin/entrypoint.sh"]
-    command: ["python", "main.py"]
     ports:
       - "5000:5000"
     environment:
@@ -18,9 +15,6 @@ services:
       - DB_USER=root
       - DB_PASSWORD=root
       - DB_NAME=car_rental
-      - MASTER_PASSWORD=REAPER
-      # Optional: pin a SECRET_KEY here
-      # - SECRET_KEY=your-hex-32-byte-string
     depends_on:
       - db
 
@@ -39,8 +33,3 @@ services:
       - "3306:3306"
     volumes:
       - ./db/car_rental_db.sql:/docker-entrypoint-initdb.d/car_rental_db.sql
-
-volumes:
-  # you can optionally persist mysql data here
-  db_data:
-    driver: local

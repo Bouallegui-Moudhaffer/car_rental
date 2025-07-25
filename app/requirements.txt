@@ -4,7 +4,3 @@ flask-mail
 flask-weasyprint
 passlib
 pycryptodome
-Flask-WTF
-email-validator
-flask-login
-passlib[bcrypt]
