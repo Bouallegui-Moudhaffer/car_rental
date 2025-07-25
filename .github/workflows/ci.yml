@@ -84,9 +84,22 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v3
 
-      - name: Bring up services via Docker Compose
+      - name: Bring up DB service
         run: |
-          docker compose up -d db web mailhog
+          docker compose up -d db
+
+      - name: Wait for MySQL (127.0.0.1:3306) before starting web
+        run: |
+          sudo apt-get update && sudo apt-get install -y mysql-client
+          echo "⏳ Waiting for MySQL at 127.0.0.1:3306…"
+          until mysqladmin ping -h 127.0.0.1 -P 3306 --silent; do
+            echo "  still waiting…"
+            sleep 5
+          done
+
+      - name: Bring up web & MailHog
+        run: |
+          docker compose up -d web mailhog
 
       - name: Wait for web to be ready on 127.0.0.1:5000
         run: |
