@@ -1,5 +1,9 @@
 name: CI
 
+permissions:
+  contents: read        # keep code read-only
+  issues: write         # allow creating/updating GitHub Issues
+
 on:
   pull_request:
 
