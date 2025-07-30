@@ -155,19 +155,14 @@ jobs:
           path: ~/.sonar/cache
           key: ${{ runner.os }}-sonar
 
-      - name: Set up Java 11 (for SonarCloud Scanner)
-        uses: actions/setup-java@v3
-        with:
-          distribution: 'adopt'
-          java-version: '11'
-
       - name: Run SonarCloud analysis
-        uses: SonarSource/sonarcloud-github-action@v1.10
+        uses: SonarSource/sonarcloud-github-action@v5.0.0   # ← pull in the v5.0.0 tag
         with:
           organization: ${{ secrets.SONAR_ORG }}
           token:        ${{ secrets.SONAR_TOKEN }}
           projectKey:   car_rental
           projectName:  Car Rental Service
+
 
 
 
