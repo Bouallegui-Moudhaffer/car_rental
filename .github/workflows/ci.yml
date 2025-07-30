@@ -1,5 +1,9 @@
 name: CI
 
+permissions:
+  contents: read        # keep code read-only
+  issues: write         # allow creating/updating GitHub Issues
+
 on:
   pull_request:
 
@@ -20,9 +24,6 @@ jobs:
         options: >-
           --health-cmd="mysqladmin ping -h localhost"
           --health-interval=10s --health-timeout=5s --health-retries=3
-        # mount your schema into docker-entrypoint-initdb.d
-        volumes:
-          - ./db/car_rental_db.sql:/docker-entrypoint-initdb.d/init.sql:ro
 
     steps:
       - name: Checkout repo
@@ -36,7 +37,7 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential default-libmysqlclient-dev
+          sudo apt-get install -y build-essential default-libmysqlclient-dev mysql-client
 
       - name: Install Python deps + dev tools
         run: |
@@ -45,19 +46,29 @@ jobs:
           pip install flake8 pytest bandit
 
       - name: Lint with flake8
-        run: flake8 app
+        run: flake8 --config .flake8 app
 
       - name: Wait for MySQL & load schema
         run: |
-          until mysqladmin ping -h localhost --silent; do
-            echo "Waiting for MySQL…"
+          echo "Waiting for MySQL at 127.0.0.1:3306 (TCP)…"
+          until mysqladmin ping -h 127.0.0.1 -P 3306 --silent; do
+            echo "  still waiting…"
             sleep 5
           done
-          mysql -h localhost -u root -proot car_rental < db/car_rental_db.sql
+
+          echo "Loading schema…"
+          mysql   -h 127.0.0.1 -P 3306 \
+                  -u root -proot \
+                  car_rental < db/car_rental_db.sql
+
+
+
 
       - name: Run pytest
+        # add this so `import app.main` will find your app/ directory
         env:
-          DB_HOST: localhost
+          PYTHONPATH: ${{ github.workspace }}
+          DB_HOST: 127.0.0.1
           DB_USER: root
           DB_PASSWORD: root
           DB_NAME: car_rental
@@ -67,8 +78,6 @@ jobs:
           SECRET_KEY: testsecretkey0123456789abcdef
         run: pytest --maxfail=1 --disable-warnings -q
 
-      - name: Bandit security scan
-        run: bandit -r app -lll
 
   zap_baseline:
     name: OWASP ZAP Baseline Scan
@@ -79,32 +88,86 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v3
 
-      - name: Bring up services via Docker Compose
+      - name: Bring up DB service
         run: |
-          # start DB, web and MailHog
-          docker-compose up -d db web mailhog
+          docker compose up -d db
 
-          # wait for DB
-          until docker exec \
-            $(docker ps -q -f ancestor=mysql:5.7) \
-            mysqladmin ping -h localhost --silent; do
-            echo "Waiting for MySQL container…"
+      - name: Wait for MySQL (127.0.0.1:3306) before starting web
+        run: |
+          sudo apt-get update && sudo apt-get install -y mysql-client
+          echo "⏳ Waiting for MySQL at 127.0.0.1:3306…"
+          until mysqladmin ping -h 127.0.0.1 -P 3306 --silent; do
+            echo "  still waiting…"
             sleep 5
           done
 
-          # wait for Flask app
-          echo "Sleeping to let Flask boot…"
-          sleep 15
+      - name: Bring up web & MailHog
+        run: |
+          docker compose up -d web mailhog
+
+      - name: Wait for web to be ready on 127.0.0.1:5000
+        run: |
+          echo "⏳ Waiting for Flask to start at http://127.0.0.1:5000 …"
+          for i in {1..12}; do
+            if curl -sSf http://127.0.0.1:5000/ >/dev/null; then
+              echo "✅ Flask is up!"
+              exit 0
+            fi
+            echo "…still waiting (attempt $i/12)…"
+            sleep 5
+          done
+          echo "❌ Timed out waiting for Flask!"
+          exit 1
 
       - name: Run ZAP baseline scan
-        uses: zaproxy/action-baseline@v0.6.0
+        uses: zaproxy/action-baseline@v0.14.0
         with:
           target: 'http://127.0.0.1:5000'
+          # point at the new GHCR stable image
+          image: 'ghcr.io/zaproxy/zaproxy:stable'
           cmd_options: >-
+            -r report_html.html \
             -r zap-report.html
 
       - name: Upload ZAP report artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: zap-report
           path: zap-report.html
+
+  sonarcloud-scan:
+    name: SonarCloud SAST
+    runs-on: ubuntu-latest
+    needs: zap_baseline
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+
+      - name: Set up Java 11
+        uses: actions/setup-java@v3
+        with:
+          distribution: temurin
+          java-version: '11'
+
+      - name: Cache SonarCloud packages
+        uses: actions/cache@v3
+        with:
+          path: ~/.sonar/cache
+          key: ${{ runner.os }}-sonar
+
+      - name: Run SonarCloud analysis
+        uses: SonarSource/sonarcloud-github-action@v1.10    # pin to latest stable
+        with:
+          organization: ${{ secrets.SONAR_ORG }}             # your SonarCloud org key
+          projectKey: car_rental
+          projectName: "Car Rental Service"
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}            # must be passed as ENV
+
+
+
+
+
+
+          
