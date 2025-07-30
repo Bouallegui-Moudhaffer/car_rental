@@ -134,3 +134,42 @@ jobs:
         with:
           name: zap-report
           path: zap-report.html
+
+  sonar-scan:
+    name: SonarQube Analysis
+    needs: lint-test-bandit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r app/requirements.txt
+          pip install sonar-scanner
+
+      - name: Run pytest coverage
+        env:
+          DB_HOST: 127.0.0.1
+          DB_USER: root
+          DB_PASSWORD: root
+          DB_NAME: car_rental
+        run: |
+          pytest --maxfail=1 --disable-warnings --junitxml=results.xml --cov=app --cov-report xml
+
+      - name: SonarQube Scanner
+        env:
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+          SONAR_TOKEN:      ${{ secrets.SONAR_TOKEN }}
+        run: |
+          sonar-scanner \
+            -Dsonar.projectKey=car-rental \
+            -Dsonar.sources=app \
+            -Dsonar.tests=tests \
+            -Dsonar.python.coverage.reportPaths=coverage.xml
