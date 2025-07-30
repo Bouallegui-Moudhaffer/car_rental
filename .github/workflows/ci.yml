@@ -162,5 +162,6 @@ jobs:
           token:        ${{ secrets.SONAR_TOKEN }}
           projectKey:   car_rental
           projectName:  Car Rental Service
-          # If you have coverage.xml, uncomment:
-          # extraArgs: "-Dsonar.python.coverage.reportPaths=coverage.xml"
+
+
+          
